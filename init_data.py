@@ -3,6 +3,7 @@ import json
 import os
 from datetime import date, timedelta
 import scraper
+from app import FALLBACK_PLAYERS
 
 DATABASE = 'nhl10clues.db'
 
@@ -95,7 +96,6 @@ def run():
     # Seed practice players
     print("Seeding practice players table...")
     try:
-        from app import FALLBACK_PLAYERS
         fallback_pids = {
             "Connor McDavid": "160293",
             "Sidney Crosby": "72740",
