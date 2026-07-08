@@ -4,7 +4,7 @@ import json
 import os
 import requests
 import urllib.parse
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 import scraper
 import random
@@ -320,14 +320,36 @@ def admin():
         flash('Unauthorized access.', 'error')
         return redirect(url_for('play'))
         
-    # Get scheduled list
+    # Generate next 30 days starting today
+    today_dt = date.today()
+    dates = [(today_dt + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30)]
+    
+    # Get scheduled list for these 30 days
     conn = get_db_connection()
-    schedule = conn.execute(
-        "SELECT date, name, position, franchises_count FROM daily_players ORDER BY date DESC"
+    placeholders = ','.join(['?'] * len(dates))
+    rows = conn.execute(
+        f"SELECT date, name, position, franchises_count FROM daily_players WHERE date IN ({placeholders})",
+        dates
     ).fetchall()
     conn.close()
     
-    return render_template('admin.html', schedule=schedule)
+    # Map row by date
+    players_by_date = {row['date']: row for row in rows}
+    
+    schedule = []
+    for d_str in dates:
+        dt = datetime.strptime(d_str, '%Y-%m-%d').date()
+        player = players_by_date.get(d_str)
+        schedule.append({
+            "date": d_str,
+            "formatted_date": dt.strftime('%a, %b %d'),
+            "name": player['name'] if player else None,
+            "position": player['position'] if player else None,
+            "franchises_count": player['franchises_count'] if player else None,
+            "scheduled": player is not None
+        })
+        
+    return render_template('admin.html', schedule=schedule, current_date=dates[0])
 
 # ----------------- API ENDPOINTS -----------------
 
@@ -546,6 +568,76 @@ def admin_scrape():
         return jsonify(details)
         
     return jsonify({"error": "Invalid action"}), 400
+
+@app.route('/api/admin/player')
+def admin_get_player():
+    if session.get('username') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    target_date = request.args.get('date')
+    if not target_date:
+        return jsonify({"error": "Missing date parameter"}), 400
+        
+    conn = get_db_connection()
+    player = conn.execute(
+        "SELECT * FROM daily_players WHERE date = ?", (target_date,)
+    ).fetchone()
+    conn.close()
+    
+    if not player:
+        return jsonify({"error": f"No player scheduled for {target_date}."}), 404
+        
+    try:
+        teams_played = json.loads(player['teams_played']) if player['teams_played'] else []
+    except Exception:
+        teams_played = []
+        
+    try:
+        milestones = json.loads(player['milestones']) if player['milestones'] else []
+    except Exception:
+        milestones = []
+        
+    try:
+        awards = json.loads(player['awards']) if player['awards'] else []
+    except Exception:
+        awards = []
+        
+    return jsonify({
+        "date": player['date'],
+        "name": player['name'],
+        "height": player['height'],
+        "weight": player['weight'],
+        "nationality": player['nationality'],
+        "shoots": player['shoots'],
+        "position": player['position'],
+        "draft_status": player['draft_status'],
+        "franchises_count": player['franchises_count'],
+        "hockeydb_url": player['hockeydb_url'],
+        "teams_played": teams_played,
+        "milestones": milestones,
+        "awards": awards,
+        "active": player['active']
+    })
+
+@app.route('/api/admin/schedule/delete', methods=['POST'])
+def admin_delete_schedule():
+    if session.get('username') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    data = request.json or {}
+    date_val = data.get('date')
+    if not date_val:
+        return jsonify({"error": "Missing date"}), 400
+        
+    conn = get_db_connection()
+    try:
+        conn.execute("DELETE FROM daily_players WHERE date = ?", (date_val,))
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/admin/schedule', methods=['POST'])
 def admin_schedule():

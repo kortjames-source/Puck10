@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initSchedulerForm();
     initEditorLists();
     initPracticeCache();
+    initTableActions();
 });
 
 // Helper: Show status messages
@@ -400,5 +401,142 @@ async function initPracticeCache() {
             refreshBtn.disabled = false;
             refreshBtn.innerHTML = `<i class="fa-solid fa-arrows-rotate"></i> Rebuild Cache (Background)`;
         }
+    });
+}
+
+function initTableActions() {
+    // 1. Assign Player button click
+    const assignBtns = document.querySelectorAll(".assign-day-btn");
+    assignBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const dateVal = btn.dataset.date;
+            // Set date input value
+            const dateInput = document.getElementById("schedule-date");
+            if (dateInput) dateInput.value = dateVal;
+            
+            // Clear editor form fields
+            document.getElementById("editor-player-name").value = "";
+            document.getElementById("editor-height").value = "";
+            document.getElementById("editor-weight").value = "";
+            document.getElementById("editor-nationality").value = "";
+            document.getElementById("editor-shoots").value = "";
+            document.getElementById("editor-position").value = "";
+            document.getElementById("editor-draft").value = "";
+            document.getElementById("editor-franchises").value = "0";
+            document.getElementById("editor-url").value = "";
+            
+            // Clear editor list items
+            const teamsList = document.getElementById("teams-editor-list");
+            if (teamsList) teamsList.innerHTML = "";
+            const milestonesList = document.getElementById("milestones-editor-list");
+            if (milestonesList) milestonesList.innerHTML = "";
+            const awardsList = document.getElementById("awards-editor-list");
+            if (awardsList) awardsList.innerHTML = "";
+            
+            // Show editor panel
+            const editorSection = document.getElementById("player-editor-section");
+            if (editorSection) {
+                editorSection.style.display = "block";
+                editorSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            
+            showAdminStatus(`Ready to assign player to date: ${dateVal}`, "info");
+        });
+    });
+
+    // 2. Edit Day button click
+    const editBtns = document.querySelectorAll(".edit-day-btn");
+    editBtns.forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const dateVal = btn.dataset.date;
+            const editorSection = document.getElementById("player-editor-section");
+            if (!editorSection) return;
+
+            btn.disabled = true;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Loading...`;
+
+            try {
+                const response = await fetch(`/api/admin/player?date=${dateVal}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    showAdminStatus(`Error fetching details: ${data.error}`, "error");
+                    return;
+                }
+
+                // Populate Form Fields
+                document.getElementById("editor-player-name").value = data.name || "";
+                document.getElementById("editor-height").value = data.height || "";
+                document.getElementById("editor-weight").value = data.weight || "";
+                document.getElementById("editor-nationality").value = data.nationality || "";
+                document.getElementById("editor-shoots").value = data.shoots || "";
+                document.getElementById("editor-position").value = data.position || "";
+                document.getElementById("editor-draft").value = data.draft_status || "";
+                document.getElementById("editor-franchises").value = data.franchises_count || "0";
+                document.getElementById("editor-url").value = data.hockeydb_url || "";
+
+                // Populate list editors
+                populateTeamsList(data.teams_played || []);
+                populateMilestonesList(data.milestones || []);
+                populateAwardsList(data.awards || []);
+
+                // Set schedule date
+                const dateInput = document.getElementById("schedule-date");
+                if (dateInput) dateInput.value = dateVal;
+
+                // Show editor panel
+                editorSection.style.display = "block";
+                editorSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+                showAdminStatus(`Loaded "${data.name}" details for ${dateVal}.`, "success");
+            } catch (err) {
+                console.error("Error loading player details for editing:", err);
+                showAdminStatus("Failed to load player details from schedule.", "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        });
+    });
+
+    // 3. Clear Day button click
+    const clearBtns = document.querySelectorAll(".clear-day-btn");
+    clearBtns.forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const dateVal = btn.dataset.date;
+            if (!confirm(`Are you sure you want to clear/remove the scheduled player for ${dateVal}?`)) {
+                return;
+            }
+
+            btn.disabled = true;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Clearing...`;
+
+            try {
+                const response = await fetch("/api/admin/schedule/delete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ date: dateVal })
+                });
+                const data = await response.json();
+
+                if (data.error) {
+                    showAdminStatus(`Error clearing date: ${data.error}`, "error");
+                    return;
+                }
+
+                showAdminStatus(`Successfully cleared schedule for ${dateVal}.`, "success");
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } catch (err) {
+                console.error("Error clearing date:", err);
+                showAdminStatus("Failed to clear schedule.", "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        });
     });
 }
