@@ -128,10 +128,10 @@ def run():
     try:
         fallback_pids = {
             "Connor McDavid": "160293",
-            "Sidney Crosby": "72740",
-            "Alexander Ovechkin": "78474",
+            "Sidney Crosby": "72457",
+            "Alexander Ovechkin": "56358",
             "Wayne Gretzky": "2035",
-            "Auston Matthews": "187652"
+            "Auston Matthews": "176228"
         }
         for p in FALLBACK_PLAYERS:
             pid = fallback_pids.get(p['name'])

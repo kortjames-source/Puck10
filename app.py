@@ -979,6 +979,9 @@ def admin_practice_cache():
                 try:
                     details = scraper.scrape_player_details(pid)
                     if "error" not in details:
+                        if details.get('seasons_played', 0) < 3:
+                            print(f"Skipping {details['name']} - only {details.get('seasons_played', 0)} NHL seasons played.")
+                            continue
                         conn_bg.execute("""
                             INSERT OR REPLACE INTO practice_players
                             (pid, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url, last_updated)
@@ -1115,8 +1118,12 @@ def admin_fill_schedule():
                 
             season_totals = data.get('seasonTotals', [])
             nhl_teams = []
+            nhl_seasons = set()
             for s in season_totals:
                 if s.get('leagueAbbrev') == 'NHL':
+                    season_id = s.get('season')
+                    if season_id:
+                        nhl_seasons.add(season_id)
                     t_name = s.get('teamName', {}).get('default')
                     if t_name:
                         cleaned = scraper.clean_team_name(t_name)
@@ -1186,9 +1193,9 @@ def admin_fill_schedule():
             return {
                 "name": name, "height": height, "weight": weight, "nationality": nationality,
                 "shoots": shoots, "position": position, "draft_status": draft_status,
-                "franchises_count": franchises_count, "teams_played": teams_played,
-                "milestones": milestones, "awards": awards_list, "hockeydb_url": hockeydb_url,
-                "player_id": str(player_id)
+                "franchises_count": franchises_count, "seasons_played": len(nhl_seasons),
+                "teams_played": teams_played, "milestones": milestones, "awards": awards_list,
+                "hockeydb_url": hockeydb_url, "player_id": str(player_id)
             }
 
         conn = get_db_connection()
@@ -1206,6 +1213,8 @@ def admin_fill_schedule():
             raw = fetch_nhl_player(p_name)
             if raw:
                 parsed = parse_nhl_player(raw)
+                if parsed.get('seasons_played', 0) < 3:
+                    continue
                 players_data.append(parsed)
                 # Save directly to practice_players table to keep cache rich
                 conn.execute(
@@ -1387,35 +1396,35 @@ FALLBACK_PLAYERS = [
 FAMOUS_PLAYER_PIDS = [
     '160293',  # Connor McDavid
     '2035',    # Wayne Gretzky
-    '72740',   # Sidney Crosby
-    '78474',   # Alex Ovechkin
-    '187652',  # Auston Matthews
-    '160074',  # Nathan MacKinnon
-    '198944',  # Cale Makar
-    '236894',  # Connor Bedard
-    '99424',   # Patrick Kane
-    '2549',    # Jaromir Jagr
-    '3121',    # Mario Lemieux
-    '4084',    # Bobby Orr
-    '2426',    # Gordie Howe
-    '5801',    # Steve Yzerman
-    '4668',    # Patrick Roy
-    '636',     # Martin Brodeur
-    '2191',    # Dominik Hasek
-    '3153',    # Nicklas Lidstrom
-    '78567',   # Evgeni Malkin
-    '172942',  # Leon Draisaitl
-    '147514',  # Nikita Kucherov
-    '104273',  # Steven Stamkos
-    '173516',  # Mitchell Marner
-    '172922',  # David Pastrnak
-    '200889',  # Quinn Hughes
-    '187515',  # Matthew Tkachuk
-    '140411',  # Artemi Panarin
-    '198336',  # Adam Fox
-    '180221',  # Sebastian Aho
-    '80136',   # Carey Price
-    '59728',   # Henrik Lundqvist
+    '72457',   # Sidney Crosby
+    '56358',   # Alex Ovechkin
+    '176228',  # Auston Matthews
+    '144669',  # Nathan MacKinnon
+    '197213',  # Cale Makar
+    '239719',  # Connor Bedard
+    '93333',   # Patrick Kane
+    '2618',    # Jaromir Jagr
+    '3124',    # Mario Lemieux
+    '4388',    # Bobby Orr
+    '2609',    # Gordie Howe
+    '5672',    # Steve Yzerman
+    '4524',    # Patrick Roy
+    '618',     # Martin Brodeur
+    '2334',    # Dominik Hasek
+    '3176',    # Nicklas Lidstrom
+    '78593',   # Evgeni Malkin
+    '155700',  # Leon Draisaitl
+    '131063',  # Nikita Kucherov
+    '100137',  # Steven Stamkos
+    '164627',  # Mitch Marner
+    '158865',  # David Pastrnak
+    '185869',  # Quinn Hughes
+    '180126',  # Matthew Tkachuk
+    '123565',  # Artemi Panarin
+    '190367',  # Adam Fox
+    '175653',  # Sebastian Aho
+    '76711',   # Carey Price
+    '56767',   # Henrik Lundqvist
 ]
 
 @app.route('/api/random-player')

@@ -183,8 +183,12 @@ def parse_nhl_player(data):
         
     season_totals = data.get('seasonTotals', [])
     nhl_teams = []
+    nhl_seasons = set()
     for s in season_totals:
         if s.get('leagueAbbrev') == 'NHL':
+            season_id = s.get('season')
+            if season_id:
+                nhl_seasons.add(season_id)
             t_name = s.get('teamName', {}).get('default')
             if t_name:
                 cleaned = scraper.clean_team_name(t_name)
@@ -264,6 +268,7 @@ def parse_nhl_player(data):
         "position": position,
         "draft_status": draft_status,
         "franchises_count": franchises_count,
+        "seasons_played": len(nhl_seasons),
         "teams_played": teams_played,
         "milestones": milestones,
         "awards": awards_list,
@@ -295,6 +300,9 @@ def run():
         raw = fetch_nhl_player(p_name)
         if raw:
             parsed = parse_nhl_player(raw)
+            if parsed.get('seasons_played', 0) < 3:
+                print(f" SKIPPED ({parsed['name']} - only {parsed['seasons_played']} seasons)")
+                continue
             players_data.append(parsed)
             print(" SUCCESS")
         else:

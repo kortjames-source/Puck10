@@ -274,6 +274,7 @@ def scrape_player_details(pid):
 
         # Stats & Teams Played For
         nhl_teams = []
+        nhl_seasons = set()
         nhl_gp = 0
         nhl_g = 0
         nhl_a = 0
@@ -319,6 +320,11 @@ def scrape_player_details(pid):
                     if lge_idx is not None and lge_idx < len(cols):
                         lge = cols[lge_idx]
                         if lge == 'NHL':
+                            season_idx = col_map.get('season') or col_map.get('yr') or 0
+                            if season_idx < len(cols):
+                                season_val = cols[season_idx]
+                                if season_val:
+                                    nhl_seasons.add(season_val)
                             team_idx = col_map.get('team')
                             team_name = cols[team_idx] if team_idx is not None else ""
                             
@@ -407,6 +413,7 @@ def scrape_player_details(pid):
             "draft_team": draft_team,
             "draft_status": draft_status,
             "franchises_count": len(nhl_teams),
+            "seasons_played": len(nhl_seasons),
             "teams_played": teams_structured,
             "milestones": milestones,
             "awards": awards,
