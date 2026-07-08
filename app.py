@@ -18,6 +18,44 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def get_player_headshot_url(player_name):
+    if not player_name:
+        return None
+    try:
+        query = player_name.strip()
+        url = f"https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=5&q={urllib.parse.quote(query)}"
+        resp = requests.get(url, timeout=3)
+        if resp.status_code == 200:
+            results = resp.json()
+            if results:
+                # Find the player that matches best (case-insensitive name match)
+                name_lower = query.lower()
+                player = None
+                for p in results:
+                    if p.get('name', '').lower().strip() == name_lower:
+                        player = p
+                        break
+                if not player:
+                    player = results[0]
+                
+                player_id = player.get('playerId')
+                team_abbrev = player.get('teamAbbrev') or player.get('lastTeamAbbrev')
+                season_id = player.get('lastSeasonId')
+                
+                if player_id and team_abbrev and season_id:
+                    return f"https://assets.nhle.com/mugs/nhl/{season_id}/{team_abbrev}/{player_id}.png"
+                
+                # Fallback: query landing API
+                if player_id:
+                    landing_url = f"https://api-web.nhle.com/v1/player/{player_id}/landing"
+                    landing_resp = requests.get(landing_url, timeout=3)
+                    if landing_resp.status_code == 200:
+                        landing_data = landing_resp.json()
+                        return landing_data.get('headshot')
+    except Exception as e:
+        print(f"Error fetching headshot for {player_name}: {e}")
+    return None
+
 def init_db():
     if not os.path.exists(DATABASE):
         # Create database file
@@ -329,7 +367,8 @@ def get_daily_player():
                 "wrong_guesses": stats['wrong_guesses'],
                 "bet_round": stats['bet_round'],
                 "won": stats['won'],
-                "player_name": player['name']
+                "player_name": player['name'],
+                "headshot_url": get_player_headshot_url(player['name'])
             }
             
     conn.close()
@@ -407,7 +446,11 @@ def make_guess():
     
     # Simple check (allow case-insensitive match)
     if correct_name == user_guess:
-        return jsonify({"correct": True, "player_name": player['name']})
+        return jsonify({
+            "correct": True, 
+            "player_name": player['name'],
+            "headshot_url": get_player_headshot_url(player['name'])
+        })
         
     # Extra check: check if it matches without accents or special characters if needed, 
     # but a simple direct comparison is usually sufficient if autocomplete helps.
@@ -433,7 +476,8 @@ def submit_game():
         conn.close()
         return jsonify({
             "status": "guest_success", 
-            "player_name": player['name'] if player else "Unknown"
+            "player_name": player['name'] if player else "Unknown",
+            "headshot_url": get_player_headshot_url(player['name']) if player else None
         })
         
     user_id = session['user_id']
@@ -476,7 +520,8 @@ def submit_game():
         return jsonify({
             "status": "success", 
             "player_name": player['name'],
-            "lifetime_stats": lifetime_stats
+            "lifetime_stats": lifetime_stats,
+            "headshot_url": get_player_headshot_url(player['name'])
         })
     except Exception as e:
         conn.close()
@@ -868,9 +913,24 @@ def make_guess_random():
     user_guess = guess.lower().strip()
     if correct_name.lower().strip() == user_guess:
         session.pop('random_player_answer', None)
-        return jsonify({"correct": True, "player_name": correct_name})
+        return jsonify({
+            "correct": True, 
+            "player_name": correct_name,
+            "headshot_url": get_player_headshot_url(correct_name)
+        })
         
     return jsonify({"correct": False})
+
+@app.route('/api/reveal-random', methods=['POST'])
+def reveal_random():
+    correct_name = session.pop('random_player_answer', None)
+    if not correct_name:
+        return jsonify({"error": "No active practice game"}), 400
+        
+    return jsonify({
+        "player_name": correct_name,
+        "headshot_url": get_player_headshot_url(correct_name)
+    })
 
 if __name__ == '__main__':
     # Bind to port 5000

@@ -12,6 +12,38 @@ let gameState = {
     finalScore: 0
 };
 
+const countryFlags = {
+    "canada": "🇨🇦",
+    "united states": "🇺🇸",
+    "usa": "🇺🇸",
+    "russia": "🇷🇺",
+    "sweden": "🇸🇪",
+    "finland": "🇫🇮",
+    "czechia": "🇨🇿",
+    "czech republic": "🇨🇿",
+    "slovakia": "🇸🇰",
+    "germany": "🇩🇪",
+    "switzerland": "🇨🇭",
+    "latvia": "🇱🇻",
+    "denmark": "🇩🇰",
+    "norway": "🇳🇴",
+    "france": "🇫🇷",
+    "austria": "🇦🇹",
+    "belarus": "🇧🇾",
+    "slovenia": "🇸🇮",
+    "united kingdom": "🇬🇧",
+    "great britain": "🇬🇧",
+    "ukraine": "🇺🇦",
+    "kazakhstan": "🇰🇿"
+};
+
+function getCountryFlag(countryName) {
+    if (!countryName) return "";
+    const name = countryName.trim().toLowerCase();
+    return countryFlags[name] || "";
+}
+
+
 // DOM Elements
 let startBetBtn, skipBetBtn, betCards, prebetContainer, gameContainer, clueList,
     guessInput, submitGuessBtn, skipClueBtn, autocompleteSuggestions,
@@ -255,6 +287,9 @@ function revealRoundClue() {
                 } catch {
                     content.innerText = rawClue;
                 }
+            } else if (gameState.currentRound === 3) {
+                const flag = getCountryFlag(rawClue);
+                content.innerText = flag ? `${flag} ${rawClue}` : rawClue;
             } else {
                 content.innerText = rawClue;
             }
@@ -287,7 +322,7 @@ async function submitGuess() {
         const data = await response.json();
 
         if (data.correct) {
-            endGame(true, data.player_name);
+            endGame(true, data.player_name, data.headshot_url);
         } else {
             gameState.wrongGuesses++;
             showToast("Incorrect Guess! -5 points", "error");
@@ -320,7 +355,7 @@ function showToast(message, type = "info") {
     }, 2500);
 }
 
-function endGame(won, playerName = "") {
+async function endGame(won, playerName = "", headshotUrl = "") {
     gameState.active = false;
     gameState.completed = true;
     gameState.won = won;
@@ -346,8 +381,24 @@ function endGame(won, playerName = "") {
     if (netScore < 0) netScore = 0;
     gameState.finalScore = netScore;
 
+    let finalPlayerName = playerName;
+    let finalHeadshotUrl = headshotUrl;
+
+    if (!won) {
+        try {
+            const response = await fetch("/api/reveal-random", { method: "POST" });
+            if (response.ok) {
+                const data = await response.json();
+                finalPlayerName = data.player_name;
+                finalHeadshotUrl = data.headshot_url;
+            }
+        } catch (err) {
+            console.error("Error revealing practice player:", err);
+        }
+    }
+
     // Show modal results
-    showResultsModal(playerName || "Unknown Player");
+    showResultsModal(finalPlayerName || "Unknown Player", finalHeadshotUrl);
 
     // Confetti!
     if (won && typeof confetti === "function") {
@@ -359,7 +410,7 @@ function endGame(won, playerName = "") {
     }
 }
 
-function showResultsModal(playerName) {
+function showResultsModal(playerName, headshotUrl = "") {
     if (resultTitle) {
         if (gameState.won) {
             resultTitle.innerText = "SUCCESS!";
@@ -372,6 +423,19 @@ function showResultsModal(playerName) {
 
     if (resultScore) resultScore.innerText = `${gameState.finalScore} pts`;
     if (correctPlayerName) correctPlayerName.innerText = playerName;
+
+    // Display player photo if available
+    const photoContainer = document.getElementById("player-photo-container");
+    const playerPhoto = document.getElementById("player-photo");
+    if (photoContainer && playerPhoto) {
+        if (headshotUrl) {
+            playerPhoto.src = headshotUrl;
+            photoContainer.style.display = "flex";
+        } else {
+            photoContainer.style.display = "none";
+            playerPhoto.src = "";
+        }
+    }
 
     // Modal Stats
     if (statsWrongGuesses) statsWrongGuesses.innerText = gameState.wrongGuesses;

@@ -25,6 +25,38 @@ const FAMOUS_NHL_PLAYERS = [
     "Zach Parise", "Ryan Suter", "Dustin Brown", "Jeff Carter", "Jonathan Quick"
 ];
 
+const countryFlags = {
+    "canada": "🇨🇦",
+    "united states": "🇺🇸",
+    "usa": "🇺🇸",
+    "russia": "🇷🇺",
+    "sweden": "🇸🇪",
+    "finland": "🇫🇮",
+    "czechia": "🇨🇿",
+    "czech republic": "🇨🇿",
+    "slovakia": "🇸🇰",
+    "germany": "🇩🇪",
+    "switzerland": "🇨🇭",
+    "latvia": "🇱🇻",
+    "denmark": "🇩🇰",
+    "norway": "🇳🇴",
+    "france": "🇫🇷",
+    "austria": "🇦🇹",
+    "belarus": "🇧🇾",
+    "slovenia": "🇸🇮",
+    "united kingdom": "🇬🇧",
+    "great britain": "🇬🇧",
+    "ukraine": "🇺🇦",
+    "kazakhstan": "🇰🇿"
+};
+
+function getCountryFlag(countryName) {
+    if (!countryName) return "";
+    const name = countryName.trim().toLowerCase();
+    return countryFlags[name] || "";
+}
+
+
 let gameState = {
     active: false,
     currentRound: 1, // 1 to 10
@@ -305,7 +337,7 @@ function showAlreadyPlayed(playedData) {
     gameState.betRound = playedData.bet_round;
 
     // Show modal results
-    showResultsModal(playedData.player_name);
+    showResultsModal(playedData.player_name, playedData.headshot_url);
 }
 
 function startGame() {
@@ -397,6 +429,9 @@ function revealRoundClue() {
                 } catch {
                     content.innerText = rawClue;
                 }
+            } else if (gameState.currentRound === 3) {
+                const flag = getCountryFlag(rawClue);
+                content.innerText = flag ? `${flag} ${rawClue}` : rawClue;
             } else {
                 content.innerText = rawClue;
             }
@@ -436,7 +471,7 @@ async function submitGuess() {
         const data = await response.json();
 
         if (data.correct) {
-            endGame(true, data.player_name);
+            endGame(true, data.player_name, data.headshot_url);
         } else {
             // Incorrect guess
             gameState.wrongGuesses++;
@@ -471,7 +506,7 @@ function showToast(message, type = "info") {
     }, 2500);
 }
 
-async function endGame(won, playerName = "") {
+async function endGame(won, playerName = "", headshotUrl = "") {
     gameState.active = false;
     gameState.completed = true;
     gameState.won = won;
@@ -528,7 +563,7 @@ async function endGame(won, playerName = "") {
         }
 
         // Show modal
-        showResultsModal(finalPlayerName);
+        showResultsModal(finalPlayerName, headshotUrl || data.headshot_url);
 
         // Confetti!
         if (won && typeof confetti === "function") {
@@ -543,7 +578,7 @@ async function endGame(won, playerName = "") {
     }
 }
 
-function showResultsModal(playerName) {
+function showResultsModal(playerName, headshotUrl = "") {
     if (resultTitle) {
         if (gameState.won) {
             resultTitle.innerText = "SUCCESS!";
@@ -556,6 +591,19 @@ function showResultsModal(playerName) {
 
     if (resultScore) resultScore.innerText = `${gameState.finalScore} pts`;
     if (correctPlayerName) correctPlayerName.innerText = playerName;
+
+    // Display player photo if available
+    const photoContainer = document.getElementById("player-photo-container");
+    const playerPhoto = document.getElementById("player-photo");
+    if (photoContainer && playerPhoto) {
+        if (headshotUrl) {
+            playerPhoto.src = headshotUrl;
+            photoContainer.style.display = "flex";
+        } else {
+            photoContainer.style.display = "none";
+            playerPhoto.src = "";
+        }
+    }
 
     // Modal Stats
     if (statsWrongGuesses) statsWrongGuesses.innerText = gameState.wrongGuesses;
