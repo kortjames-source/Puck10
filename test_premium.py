@@ -13,18 +13,20 @@ class Puck10PremiumTestCase(unittest.TestCase):
         
         # Set up test database or clean test users
         conn = get_db_connection()
-        conn.execute("DELETE FROM users WHERE username IN ('test_premium_user', 'recovery_test_user')")
-        conn.execute("DELETE FROM user_stats WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user'))")
-        conn.execute("DELETE FROM password_resets WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user'))")
+        conn.execute("DELETE FROM users WHERE username IN ('test_premium_user', 'recovery_test_user', 'standard_test_user', 'vip_test_user')")
+        conn.execute("DELETE FROM user_stats WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user', 'standard_test_user', 'vip_test_user'))")
+        conn.execute("DELETE FROM password_resets WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user', 'standard_test_user', 'vip_test_user'))")
+        conn.execute("DELETE FROM error_logs WHERE request_path = '/api/trigger-test-error'")
         conn.commit()
         conn.close()
 
     def tearDown(self):
         # Cleanup
         conn = get_db_connection()
-        conn.execute("DELETE FROM users WHERE username IN ('test_premium_user', 'recovery_test_user')")
-        conn.execute("DELETE FROM user_stats WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user'))")
-        conn.execute("DELETE FROM password_resets WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user'))")
+        conn.execute("DELETE FROM users WHERE username IN ('test_premium_user', 'recovery_test_user', 'standard_test_user', 'vip_test_user')")
+        conn.execute("DELETE FROM user_stats WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user', 'standard_test_user', 'vip_test_user'))")
+        conn.execute("DELETE FROM password_resets WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user', 'standard_test_user', 'vip_test_user'))")
+        conn.execute("DELETE FROM error_logs WHERE request_path = '/api/trigger-test-error'")
         conn.commit()
         conn.close()
 
@@ -319,5 +321,129 @@ class Puck10PremiumTestCase(unittest.TestCase):
         }, follow_redirects=True)
         self.assertIn(b'Successfully logged in!', response.data)
 
+    def test_admin_endpoints_access_control(self):
+        # 1. Non-logged in client should get 403
+        response = self.client.get('/api/admin/users')
+        self.assertEqual(response.status_code, 403)
+        
+        # 2. Logged in standard user should get 403
+        self.client.post('/register', data={
+            'username': 'standard_test_user',
+            'email': 'standard@example.com',
+            'password': 'password123',
+            'confirm_password': 'password123'
+        }, follow_redirects=True)
+        
+        response = self.client.get('/api/admin/users')
+        self.assertEqual(response.status_code, 403)
+        
+        response = self.client.get('/api/admin/errors')
+        self.assertEqual(response.status_code, 403)
+        
+        # 3. Admin user should get 200
+        self.client.get('/logout')
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['user_id'] = 9999
+            
+        response = self.client.get('/api/admin/users')
+        self.assertEqual(response.status_code, 200)
+        
+        response = self.client.get('/api/admin/errors')
+        self.assertEqual(response.status_code, 200)
+
+    def test_admin_vip_status_flow(self):
+        # Register a standard user
+        self.client.post('/register', data={
+            'username': 'vip_test_user',
+            'email': 'vip_test@example.com',
+            'password': 'password123',
+            'confirm_password': 'password123'
+        }, follow_redirects=True)
+        
+        # Fetch their user_id
+        conn = get_db_connection()
+        user_row = conn.execute("SELECT id FROM users WHERE username = 'vip_test_user'").fetchone()
+        self.assertIsNotNone(user_row)
+        user_id = user_row['id']
+        conn.close()
+        
+        # Log out standard user, log in as admin
+        self.client.get('/logout')
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['user_id'] = 9999
+            
+        # 1. Toggle premium to ON
+        response = self.client.post('/api/admin/users/toggle-premium', json={
+            'user_id': user_id,
+            'is_premium': 1,
+            'notes': 'Test VIP activation notes'
+        })
+        self.assertEqual(response.status_code, 200)
+        
+        # Check database
+        conn = get_db_connection()
+        user = conn.execute("SELECT is_premium FROM users WHERE id = ?", (user_id,)).fetchone()
+        self.assertEqual(user['is_premium'], 1)
+        
+        history = conn.execute("SELECT action, notes, ended_at FROM premium_history WHERE user_id = ? ORDER BY id DESC", (user_id,)).fetchall()
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]['action'], 'grant')
+        self.assertEqual(history[0]['notes'], 'Test VIP activation notes')
+        self.assertIsNone(history[0]['ended_at'])
+        conn.close()
+        
+        # 2. Toggle premium to OFF
+        response = self.client.post('/api/admin/users/toggle-premium', json={
+            'user_id': user_id,
+            'is_premium': 0,
+            'notes': 'Test VIP revocation notes'
+        })
+        self.assertEqual(response.status_code, 200)
+        
+        # Check database
+        conn = get_db_connection()
+        user = conn.execute("SELECT is_premium FROM users WHERE id = ?", (user_id,)).fetchone()
+        self.assertEqual(user['is_premium'], 0)
+        
+        history = conn.execute("SELECT action, notes, ended_at, duration_seconds FROM premium_history WHERE user_id = ? ORDER BY id ASC", (user_id,)).fetchall()
+        # Should have a grant (now ended) and a revoke log
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0]['action'], 'grant')
+        self.assertIsNotNone(history[0]['ended_at'])
+        self.assertIsNotNone(history[0]['duration_seconds'])
+        
+        self.assertEqual(history[1]['action'], 'revoke')
+        self.assertEqual(history[1]['notes'], 'Test VIP revocation notes')
+        conn.close()
+
+    def test_error_logging_flow(self):
+        from unittest.mock import patch
+        
+        # Log in as admin so we can access /api/admin/scrape
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['user_id'] = 9999
+            
+        with patch('scraper.search_player_id', side_effect=ValueError("Simulated division by zero")):
+            response = self.client.get('/api/admin/scrape?action=search&query=Wayne')
+            self.assertEqual(response.status_code, 500)
+            
+        # Check that error is in database
+        conn = get_db_connection()
+        err_row = conn.execute("SELECT error_type, message, request_path FROM error_logs WHERE message = 'Simulated division by zero' ORDER BY id DESC LIMIT 1").fetchone()
+        
+        # Cleanup log to avoid polluting the database
+        conn.execute("DELETE FROM error_logs WHERE message = 'Simulated division by zero'")
+        conn.commit()
+        conn.close()
+        
+        self.assertIsNotNone(err_row)
+        self.assertEqual(err_row['error_type'], 'ValueError')
+        self.assertEqual(err_row['message'], 'Simulated division by zero')
+        self.assertEqual(err_row['request_path'], '/api/admin/scrape')
+
 if __name__ == '__main__':
     unittest.main()
+

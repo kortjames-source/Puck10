@@ -11,249 +11,454 @@
 <!-- Status Message Placeholder -->
 <div id="admin-status-message" class="flash" style="display: none; margin-bottom: 1.5rem;"></div>
 
-<div class="charts-container" style="margin-top: 0;">
-    <!-- Search / Fetch Box -->
-    <div class="card">
-        <h3 class="card-title">HockeyDB Fetcher</h3>
-        
-        <!-- Search Form -->
-        <div class="form-group">
-            <label class="form-label" for="search-player-name">Search Player Name</label>
-            <div style="display: flex; gap: 0.5rem;">
-                <input type="text" id="search-player-name" class="form-control" placeholder="e.g. Wayne Gretzky">
-                <button id="search-hockeydb-btn" class="btn btn-primary" type="button">
-                    <i class="fa-solid fa-magnifying-glass"></i> Search
-                </button>
-            </div>
-        </div>
-
-        <div style="text-align: center; margin: 1rem 0; color: var(--text-muted);">--- OR ---</div>
-
-        <!-- PID Direct Fetch Form -->
-        <div class="form-group">
-            <label class="form-label" for="scrape-player-pid">Fetch directly by HockeyDB ID (PID)</label>
-            <div style="display: flex; gap: 0.5rem;">
-                <input type="number" id="scrape-player-pid" class="form-control" placeholder="e.g. 2035">
-                <button id="scrape-pid-btn" class="btn btn-secondary" type="button">
-                    <i class="fa-solid fa-cloud-arrow-down"></i> Fetch PID
-                </button>
-            </div>
-        </div>
-
-        <!-- Search Results List -->
-        <div id="search-results-list" class="admin-search-results">
-            <!-- Results populated dynamically by javascript -->
-        </div>
-    </div>
-
-    <!-- Scheduled Days Calendar -->
-    <div class="card">
-        <h3 class="card-title">30-Day Lineup Schedule</h3>
-        <div class="schedule-table-wrapper" style="max-height: 550px; overflow-y: auto;">
-            {% if schedule %}
-            <table class="schedule-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Player Details</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in schedule %}
-                    <tr>
-                        <td style="white-space: nowrap; vertical-align: middle;">
-                            <div style="font-weight: 600;">{{ item.formatted_date }}</div>
-                            <div class="text-secondary" style="font-size: 0.8rem; margin-top: 0.1rem;">{{ item.date }}</div>
-                        </td>
-                        <td style="vertical-align: middle;">
-                            {% if item.scheduled %}
-                            <div style="font-weight: 600; color: var(--primary);">{{ item.name }}</div>
-                            <div class="text-secondary" style="font-size: 0.8rem; margin-top: 0.1rem;">
-                                {{ item.position or 'N/A' }} | {{ item.franchises_count }} teams
-                            </div>
-                            {% else %}
-                            <span class="text-secondary" style="font-style: italic; opacity: 0.7;">No player scheduled</span>
-                            {% endif %}
-                        </td>
-                        <td style="vertical-align: middle;">
-                            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
-                                {% if item.scheduled %}
-                                <button class="btn btn-secondary btn-xs edit-day-btn" data-date="{{ item.date }}" type="button">
-                                    <i class="fa-solid fa-pen-to-square"></i> Edit
-                                </button>
-                                <button class="btn btn-accent btn-xs clear-day-btn" data-date="{{ item.date }}" type="button">
-                                    <i class="fa-solid fa-trash"></i> Clear
-                                </button>
-                                {% else %}
-                                <button class="btn btn-primary btn-xs assign-day-btn" data-date="{{ item.date }}" type="button">
-                                    <i class="fa-solid fa-plus"></i> Assign
-                                </button>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <p class="text-secondary text-center" style="padding: 2rem 0;">No calendar days generated.</p>
-            {% endif %}
-        </div>
-    </div>
+<div class="admin-tabs">
+    <button class="admin-tab-btn active" data-tab="lineup">
+        <i class="fa-solid fa-calendar-days"></i> Lineup & Schedule
+    </button>
+    <button class="admin-tab-btn" data-tab="users">
+        <i class="fa-solid fa-users-gear"></i> User Management
+    </button>
+    <button class="admin-tab-btn" data-tab="errors">
+        <i class="fa-solid fa-bug"></i> System Error Logs
+    </button>
 </div>
 
-<!-- Practice Cache Control -->
-<div class="card" style="margin-top: 2rem;">
-    <h3 class="card-title">Practice Mode Cache</h3>
-    <p class="text-secondary" style="margin-bottom: 1.5rem;">
-        Players for Practice Mode are served from a local database cache to prevent hitting HockeyDB rate limits during play.
-    </p>
-    <div style="display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
-        <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label">Total Cached Players</label>
-            <div id="practice-cache-count" style="font-size: 1.5rem; font-weight: 600; color: var(--primary); margin-top: 0.25rem;">Loading...</div>
-        </div>
-        <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label">Last Updated</label>
-            <div id="practice-cache-updated" style="font-size: 1.5rem; font-weight: 600; color: var(--primary); margin-top: 0.25rem;">Loading...</div>
-        </div>
-    </div>
-    <div>
-        <button id="refresh-practice-cache-btn" class="btn btn-secondary" type="button">
-            <i class="fa-solid fa-arrows-rotate"></i> Rebuild Cache (Background)
-        </button>
-    </div>
-</div>
-
-<!-- Schedule Seeding Tools -->
-<div class="card" style="margin-top: 2rem;">
-    <h3 class="card-title">Schedule Seeding Tools</h3>
-    <p class="text-secondary" style="margin-bottom: 1.5rem;">
-        Automatically fill in and randomize the unfilled days of July 2026 using a pool of high-quality famous players retrieved from the NHL API.
-    </p>
-    <div>
-        <button id="auto-fill-schedule-btn" class="btn btn-primary" type="button">
-            <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-fill July Schedule
-        </button>
-    </div>
-</div>
-
-<!-- Player Details Editor Form (Initially Hidden) -->
-<div id="player-editor-section" class="card" style="display: none;">
-    <h3 class="card-title" style="color: var(--primary); border-bottom-color: var(--primary-glow);">
-        Player Clues & Info Editor
-    </h3>
-
-    <form id="player-editor-form" onsubmit="event.preventDefault();">
-        <div class="admin-editor-grid">
-            <div class="form-group">
-                <label class="form-label" for="editor-player-name">Player Name (Target Answer)</label>
-                <input type="text" id="editor-player-name" class="form-control" required>
-            </div>
+<!-- Tab 1: Lineup & Schedule -->
+<div id="tab-lineup" class="admin-tab-content active">
+    <div class="charts-container" style="margin-top: 0;">
+        <!-- Search / Fetch Box -->
+        <div class="card">
+            <h3 class="card-title">HockeyDB Fetcher</h3>
             
+            <!-- Search Form -->
             <div class="form-group">
-                <label class="form-label" for="editor-height">Height (Clue 1)</label>
-                <input type="text" id="editor-height" class="form-control" placeholder="e.g. 6' 1&quot;">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label" for="editor-weight">Weight (Clue 2)</label>
-                <input type="text" id="editor-weight" class="form-control" placeholder="e.g. 194 lbs">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label" for="editor-nationality">Nationality / Country of Birth (Clue 3)</label>
-                <input type="text" id="editor-nationality" class="form-control" placeholder="e.g. Canada">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label" for="editor-shoots">Shoots Hand (Clue 4)</label>
-                <select id="editor-shoots" class="form-control">
-                    <option value="">-- Select --</option>
-                    <option value="L">L (Left)</option>
-                    <option value="R">R (Right)</option>
-                    <option value="UNKNOWN">UNKNOWN</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label" for="editor-position">Position played (Clue 5)</label>
-                <input type="text" id="editor-position" class="form-control" placeholder="e.g. Center">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label" for="editor-draft">Draft Status (Clue 6)</label>
-                <input type="text" id="editor-draft" class="form-control" placeholder="e.g. 2015 Round 1 #1 overall by Edmonton Oilers">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label" for="editor-franchises">Number of NHL Franchises played for (Clue 7)</label>
-                <input type="number" id="editor-franchises" class="form-control" placeholder="e.g. 1">
-            </div>
-        </div>
-
-        <div class="form-group" style="margin-top: 1rem;">
-            <label class="form-label" for="editor-url">HockeyDB Url (Reference)</label>
-            <input type="text" id="editor-url" class="form-control" readonly>
-        </div>
-
-        <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
-
-        <!-- Clue 8: Teams List Editor -->
-        <div class="form-group">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                <label class="form-label" style="margin-bottom: 0;">NHL Teams & Logos (Clue 8)</label>
-                <button type="button" id="add-team-btn" class="btn btn-secondary btn-sm"><i class="fa-solid fa-plus"></i> Add Team</button>
-            </div>
-            <div id="teams-editor-list" class="teams-editor-list">
-                <!-- Team rows appended here by JS -->
-            </div>
-        </div>
-
-        <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
-
-        <!-- Clue 9: Milestones List Editor -->
-        <div class="form-group">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                <label class="form-label" style="margin-bottom: 0;">Career Milestones (Clue 9)</label>
-                <button type="button" id="add-milestone-btn" class="btn btn-secondary btn-sm"><i class="fa-solid fa-plus"></i> Add Milestone</button>
-            </div>
-            <div id="milestones-editor-list">
-                <!-- Milestone rows appended here by JS -->
-            </div>
-        </div>
-
-        <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
-
-        <!-- Clue 10: Awards List Editor -->
-        <div class="form-group">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                <label class="form-label" style="margin-bottom: 0;">Specific Awards Won (Clue 10)</label>
-                <button type="button" id="add-award-btn" class="btn btn-secondary btn-sm"><i class="fa-solid fa-plus"></i> Add Award</button>
-            </div>
-            <div id="awards-editor-list">
-                <!-- Award rows appended here by JS -->
-            </div>
-        </div>
-
-        <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
-
-        <!-- Scheduler Date and Save -->
-        <div class="card" style="background: rgba(255, 255, 255, 0.02); margin-top: 2rem; padding: 1.5rem;">
-            <div style="display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-end;">
-                <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
-                    <label class="form-label" for="schedule-date">Select Game Date</label>
-                    <input type="date" id="schedule-date" class="form-control" value="{{ current_date }}">
-                </div>
-                <div style="margin-bottom: 0;">
-                    <button type="button" id="save-schedule-btn" class="btn btn-primary" style="padding: 0.75rem 2rem;">
-                        <i class="fa-solid fa-calendar-check"></i> Save to Schedule
+                <label class="form-label" for="search-player-name">Search Player Name</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="search-player-name" class="form-control" placeholder="e.g. Wayne Gretzky">
+                    <button id="search-hockeydb-btn" class="btn btn-primary" type="button">
+                        <i class="fa-solid fa-magnifying-glass"></i> Search
                     </button>
                 </div>
             </div>
+
+            <div style="text-align: center; margin: 1rem 0; color: var(--text-muted);">--- OR ---</div>
+
+            <!-- PID Direct Fetch Form -->
+            <div class="form-group">
+                <label class="form-label" for="scrape-player-pid">Fetch directly by HockeyDB ID (PID)</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="number" id="scrape-player-pid" class="form-control" placeholder="e.g. 2035">
+                    <button id="scrape-pid-btn" class="btn btn-secondary" type="button">
+                        <i class="fa-solid fa-cloud-arrow-down"></i> Fetch PID
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Results List -->
+            <div id="search-results-list" class="admin-search-results">
+                <!-- Results populated dynamically by javascript -->
+            </div>
         </div>
-    </form>
+
+        <!-- Scheduled Days Calendar -->
+        <div class="card">
+            <h3 class="card-title">30-Day Lineup Schedule</h3>
+            <div class="schedule-table-wrapper" style="max-height: 550px; overflow-y: auto;">
+                {% if schedule %}
+                <table class="schedule-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Player Details</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in schedule %}
+                        <tr>
+                            <td style="white-space: nowrap; vertical-align: middle;">
+                                <div style="font-weight: 600;">{{ item.formatted_date }}</div>
+                                <div class="text-secondary" style="font-size: 0.8rem; margin-top: 0.1rem;">{{ item.date }}</div>
+                            </td>
+                            <td style="vertical-align: middle;">
+                                {% if item.scheduled %}
+                                <div style="font-weight: 600; color: var(--primary);">{{ item.name }}</div>
+                                <div class="text-secondary" style="font-size: 0.8rem; margin-top: 0.1rem;">
+                                    {{ item.position or 'N/A' }} | {{ item.franchises_count }} teams
+                                </div>
+                                {% else %}
+                                <span class="text-secondary" style="font-style: italic; opacity: 0.7;">No player scheduled</span>
+                                {% endif %}
+                            </td>
+                            <td style="vertical-align: middle;">
+                                <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                                    {% if item.scheduled %}
+                                    <button class="btn btn-secondary btn-xs edit-day-btn" data-date="{{ item.date }}" type="button">
+                                        <i class="fa-solid fa-pen-to-square"></i> Edit
+                                    </button>
+                                    <button class="btn btn-accent btn-xs clear-day-btn" data-date="{{ item.date }}" type="button">
+                                        <i class="fa-solid fa-trash"></i> Clear
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-primary btn-xs assign-day-btn" data-date="{{ item.date }}" type="button">
+                                        <i class="fa-solid fa-plus"></i> Assign
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-secondary text-center" style="padding: 2rem 0;">No calendar days generated.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Practice Cache Control -->
+    <div class="card" style="margin-top: 2rem;">
+        <h3 class="card-title">Practice Mode Cache</h3>
+        <p class="text-secondary" style="margin-bottom: 1.5rem;">
+            Players for Practice Mode are served from a local database cache to prevent hitting HockeyDB rate limits during play.
+        </p>
+        <div style="display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Total Cached Players</label>
+                <div id="practice-cache-count" style="font-size: 1.5rem; font-weight: 600; color: var(--primary); margin-top: 0.25rem;">Loading...</div>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Last Updated</label>
+                <div id="practice-cache-updated" style="font-size: 1.5rem; font-weight: 600; color: var(--primary); margin-top: 0.25rem;">Loading...</div>
+            </div>
+        </div>
+        <div>
+            <button id="refresh-practice-cache-btn" class="btn btn-secondary" type="button">
+                <i class="fa-solid fa-arrows-rotate"></i> Rebuild Cache (Background)
+            </button>
+        </div>
+    </div>
+
+    <!-- Schedule Seeding Tools -->
+    <div class="card" style="margin-top: 2rem;">
+        <h3 class="card-title">Schedule Seeding Tools</h3>
+        <p class="text-secondary" style="margin-bottom: 1.5rem;">
+            Automatically fill in and randomize the unfilled days of July 2026 using a pool of high-quality famous players retrieved from the NHL API.
+        </p>
+        <div>
+            <button id="auto-fill-schedule-btn" class="btn btn-primary" type="button">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-fill July Schedule
+            </button>
+        </div>
+    </div>
+
+    <!-- Player Details Editor Form (Initially Hidden) -->
+    <div id="player-editor-section" class="card" style="display: none; margin-top: 2rem;">
+        <h3 class="card-title" style="color: var(--primary); border-bottom-color: var(--primary-glow);">
+            Player Clues & Info Editor
+        </h3>
+
+        <form id="player-editor-form" onsubmit="event.preventDefault();">
+            <div class="admin-editor-grid">
+                <div class="form-group">
+                    <label class="form-label" for="editor-player-name">Player Name (Target Answer)</label>
+                    <input type="text" id="editor-player-name" class="form-control" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="editor-height">Height (Clue 1)</label>
+                    <input type="text" id="editor-height" class="form-control" placeholder="e.g. 6' 1&quot;">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="editor-weight">Weight (Clue 2)</label>
+                    <input type="text" id="editor-weight" class="form-control" placeholder="e.g. 194 lbs">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="editor-nationality">Nationality / Country of Birth (Clue 3)</label>
+                    <input type="text" id="editor-nationality" class="form-control" placeholder="e.g. Canada">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="editor-shoots">Shoots Hand (Clue 4)</label>
+                    <select id="editor-shoots" class="form-control">
+                        <option value="">-- Select --</option>
+                        <option value="L">L (Left)</option>
+                        <option value="R">R (Right)</option>
+                        <option value="UNKNOWN">UNKNOWN</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="editor-position">Position played (Clue 5)</label>
+                    <input type="text" id="editor-position" class="form-control" placeholder="e.g. Center">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="editor-draft">Draft Status (Clue 6)</label>
+                    <input type="text" id="editor-draft" class="form-control" placeholder="e.g. 2015 Round 1 #1 overall by Edmonton Oilers">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="editor-franchises">Number of NHL Franchises played for (Clue 7)</label>
+                    <input type="number" id="editor-franchises" class="form-control" placeholder="e.g. 1">
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 1rem;">
+                <label class="form-label" for="editor-url">HockeyDB Url (Reference)</label>
+                <input type="text" id="editor-url" class="form-control" readonly>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
+
+            <!-- Clue 8: Teams List Editor -->
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                    <label class="form-label" style="margin-bottom: 0;">NHL Teams & Logos (Clue 8)</label>
+                    <button type="button" id="add-team-btn" class="btn btn-secondary btn-sm"><i class="fa-solid fa-plus"></i> Add Team</button>
+                </div>
+                <div id="teams-editor-list" class="teams-editor-list">
+                    <!-- Team rows appended here by JS -->
+                </div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
+
+            <!-- Clue 9: Milestones List Editor -->
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                    <label class="form-label" style="margin-bottom: 0;">Career Milestones (Clue 9)</label>
+                    <button type="button" id="add-milestone-btn" class="btn btn-secondary btn-sm"><i class="fa-solid fa-plus"></i> Add Milestone</button>
+                </div>
+                <div id="milestones-editor-list">
+                    <!-- Milestone rows appended here by JS -->
+                </div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
+
+            <!-- Clue 10: Awards List Editor -->
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                    <label class="form-label" style="margin-bottom: 0;">Specific Awards Won (Clue 10)</label>
+                    <button type="button" id="add-award-btn" class="btn btn-secondary btn-sm"><i class="fa-solid fa-plus"></i> Add Award</button>
+                </div>
+                <div id="awards-editor-list">
+                    <!-- Award rows appended here by JS -->
+                </div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
+
+            <!-- Scheduler Date and Save -->
+            <div class="card" style="background: rgba(255, 255, 255, 0.02); margin-top: 2rem; padding: 1.5rem;">
+                <div style="display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-end;">
+                    <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                        <label class="form-label" for="schedule-date">Select Game Date</label>
+                        <input type="date" id="schedule-date" class="form-control" value="{{ current_date }}">
+                    </div>
+                    <div style="margin-bottom: 0;">
+                        <button type="button" id="save-schedule-btn" class="btn btn-primary" style="padding: 0.75rem 2rem;">
+                            <i class="fa-solid fa-calendar-check"></i> Save to Schedule
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Tab 2: User Management -->
+<div id="tab-users" class="admin-tab-content">
+    <div class="card">
+        <h3 class="card-title">User Accounts</h3>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; max-width: 400px;">
+            <input type="text" id="user-search-input" class="form-control" placeholder="Search username or email...">
+            <button id="user-search-btn" class="btn btn-secondary" type="button">
+                <i class="fa-solid fa-magnifying-glass"></i> Search
+            </button>
+        </div>
+        <div class="schedule-table-wrapper" style="max-height: 500px; overflow-y: auto;">
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Access Status</th>
+                        <th>VIP Duration</th>
+                        <th>Created At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-users-tbody">
+                    <!-- Populated dynamically by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Inline User Details Editor -->
+    <div id="user-editor-section" class="card" style="display: none; margin-top: 2rem;">
+        <h3 class="card-title" style="color: var(--primary); border-bottom-color: var(--primary-glow);">
+            Edit User Profile
+        </h3>
+        <form id="user-editor-form" onsubmit="event.preventDefault();">
+            <input type="hidden" id="edit-user-id">
+            <div class="admin-editor-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+                <div class="form-group">
+                    <label class="form-label" for="edit-username">Username</label>
+                    <input type="text" id="edit-username" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="edit-email">Email Address</label>
+                    <input type="email" id="edit-email" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="edit-premium-toggle">VIP Access Tier</label>
+                    <select id="edit-premium-toggle" class="form-control">
+                        <option value="0">Standard (3 games limit)</option>
+                        <option value="1">VIP (Unlimited access)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="edit-premium-notes">Notes / Reason (History Log)</label>
+                    <input type="text" id="edit-premium-notes" class="form-control" placeholder="e.g. Granted VIP access for family/friend">
+                </div>
+            </div>
+            <div style="margin-top: 1.5rem; display: flex; gap: 1rem;">
+                <button type="button" id="save-user-btn" class="btn btn-primary">
+                    <i class="fa-solid fa-circle-check"></i> Save Changes
+                </button>
+                <button type="button" id="cancel-user-edit-btn" class="btn btn-secondary">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Inline Manual Password Reset -->
+    <div id="password-reset-section" class="card" style="display: none; margin-top: 2rem;">
+        <h3 class="card-title" style="color: var(--secondary); border-bottom-color: var(--secondary-glow);">
+            Reset User Password Manually
+        </h3>
+        <form id="password-reset-form" onsubmit="event.preventDefault();">
+            <input type="hidden" id="reset-user-id">
+            <div style="max-width: 400px; display: flex; flex-direction: column; gap: 1rem;">
+                <div>
+                    Resetting password for: <span id="reset-username-display" style="font-weight: bold; color: var(--secondary);"></span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="reset-new-password">New Password</label>
+                    <input type="password" id="reset-new-password" class="form-control" required placeholder="Minimum 6 characters" minlength="6">
+                </div>
+            </div>
+            <div style="margin-top: 1.5rem; display: flex; gap: 1rem;">
+                <button type="button" id="save-password-btn" class="btn btn-primary" style="background: linear-gradient(135deg, var(--secondary), var(--primary)); box-shadow: 0 4px 14px rgba(168, 85, 247, 0.3);">
+                    <i class="fa-solid fa-key"></i> Update Password
+                </button>
+                <button type="button" id="cancel-password-reset-btn" class="btn btn-secondary">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Inline VIP History Viewer -->
+    <div id="premium-history-section" class="card" style="display: none; margin-top: 2rem;">
+        <h3 class="card-title" style="color: var(--primary); border-bottom-color: var(--primary-glow);">
+            VIP Status History Log
+        </h3>
+        <div style="margin-bottom: 1.5rem; font-size: 1.1rem;">
+            User: <span id="history-username-display" style="font-weight: bold; color: var(--primary);"></span>
+        </div>
+        <div class="schedule-table-wrapper" style="max-height: 350px; overflow-y: auto;">
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>Granted At (UTC)</th>
+                        <th>Revoked At (UTC)</th>
+                        <th>VIP Duration</th>
+                        <th>Notes / Context</th>
+                    </tr>
+                </thead>
+                <tbody id="premium-history-tbody">
+                    <!-- Populated dynamically -->
+                </tbody>
+            </table>
+        </div>
+        <div style="margin-top: 1.5rem;">
+            <button type="button" id="close-history-btn" class="btn btn-secondary">
+                Close Audit Logs
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Tab 3: System Error Logs -->
+<div id="tab-errors" class="admin-tab-content">
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+            <h3 class="card-title" style="margin-bottom: 0;">Captured System Exceptions</h3>
+            <button id="clear-all-errors-btn" class="btn btn-accent btn-sm" type="button">
+                <i class="fa-solid fa-dumpster-fire"></i> Clear All Logs
+            </button>
+        </div>
+        <div class="schedule-table-wrapper" style="max-height: 500px; overflow-y: auto;">
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Timestamp (UTC)</th>
+                        <th>Error Type</th>
+                        <th>Endpoint / Path</th>
+                        <th>Message Preview</th>
+                        <th>User</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-errors-tbody">
+                    <!-- Populated dynamically by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Inline Trace Viewer -->
+    <div id="error-details-section" class="card" style="display: none; margin-top: 2rem;">
+        <h3 class="card-title" style="color: var(--accent); border-bottom-color: var(--accent-glow);">
+            Exception Details & Stack Trace
+        </h3>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.9rem; background: rgba(0,0,0,0.15); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+                <div><strong>Log ID:</strong> <span id="error-detail-id"></span></div>
+                <div><strong>Timestamp (UTC):</strong> <span id="error-detail-timestamp"></span></div>
+                <div><strong>Error Type:</strong> <span id="error-detail-type" style="color: var(--accent); font-family: monospace; font-weight: bold;"></span></div>
+                <div><strong>Request Path:</strong> <span id="error-detail-path" style="font-family: monospace;"></span></div>
+                <div><strong>Triggered By:</strong> <span id="error-detail-user" style="font-weight: bold; color: var(--primary);"></span></div>
+            </div>
+            <div>
+                <label class="form-label">Error Message</label>
+                <div id="error-detail-message" class="error-message-box"></div>
+            </div>
+            <div>
+                <label class="form-label">Stack Trace</label>
+                <pre id="error-detail-stack" class="stack-trace-view"></pre>
+            </div>
+        </div>
+        <div style="margin-top: 1.5rem; display: flex; gap: 1rem;">
+            <button type="button" id="delete-error-log-btn" class="btn btn-accent">
+                <i class="fa-solid fa-trash"></i> Delete This Log
+            </button>
+            <button type="button" id="close-error-details-btn" class="btn btn-secondary">
+                Close Details
+            </button>
+        </div>
+    </div>
 </div>
 {% endblock %}
 

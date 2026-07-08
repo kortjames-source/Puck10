@@ -123,6 +123,160 @@ def init_db():
 # Initialize DB on start
 init_db()
 
+def parse_db_timestamp(ts_str):
+    if not ts_str:
+        return None
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(ts_str, fmt)
+        except ValueError:
+            continue
+    return None
+
+def log_error_to_db(error_type, message, stack_trace=None, request_path=None, user_id=None):
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "INSERT INTO error_logs (error_type, message, stack_trace, request_path, user_id) VALUES (?, ?, ?, ?, ?)",
+            (error_type, message, stack_trace, request_path, user_id)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as db_err:
+        print(f"FAILED TO LOG EXCEPTION TO DB: {db_err}")
+
+def format_duration_seconds(seconds):
+    if seconds <= 0:
+        return "0s"
+    days = seconds // 86400
+    hours = (seconds % 86400) // 3600
+    minutes = (seconds % 3600) // 60
+    
+    parts = []
+    if days > 0:
+        parts.append(f"{int(days)}d")
+    if hours > 0:
+        parts.append(f"{int(hours)}h")
+    if minutes > 0:
+        parts.append(f"{int(minutes)}m")
+        
+    if not parts:
+        parts.append(f"{int(seconds)}s")
+        
+    return " ".join(parts)
+
+def toggle_user_premium(conn, user_id, make_premium, notes=None):
+    user = conn.execute("SELECT is_premium FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        return False, "User not found"
+        
+    current_status = bool(user['is_premium'])
+    target_status = bool(make_premium)
+    
+    if current_status == target_status:
+        return True, "No change"
+        
+    conn.execute("UPDATE users SET is_premium = ? WHERE id = ?", (1 if target_status else 0, user_id))
+    
+    now_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    if target_status:
+        conn.execute(
+            "INSERT INTO premium_history (user_id, action, notes, started_at) VALUES (?, ?, ?, ?)",
+            (user_id, 'grant', notes or 'Granted by Admin', now_str)
+        )
+    else:
+        active_record = conn.execute(
+            "SELECT id, started_at FROM premium_history WHERE user_id = ? AND action = 'grant' AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1",
+            (user_id,)
+        ).fetchone()
+        
+        if active_record:
+            started_at = parse_db_timestamp(active_record['started_at'])
+            duration_seconds = None
+            if started_at:
+                duration_seconds = int((datetime.utcnow() - started_at).total_seconds())
+                
+            conn.execute(
+                "UPDATE premium_history SET ended_at = ?, duration_seconds = ? WHERE id = ?",
+                (now_str, duration_seconds, active_record['id'])
+            )
+            conn.execute(
+                "INSERT INTO premium_history (user_id, action, started_at, ended_at, duration_seconds, notes) VALUES (?, ?, ?, ?, ?, ?)",
+                (user_id, 'revoke', now_str, now_str, 0, notes or 'Revoked by Admin')
+            )
+        else:
+            conn.execute(
+                "INSERT INTO premium_history (user_id, action, started_at, ended_at, duration_seconds, notes) VALUES (?, ?, ?, ?, ?, ?)",
+                (user_id, 'revoke', now_str, now_str, 0, notes or 'Revoked by Admin')
+            )
+            
+    return True, "Success"
+
+def get_premium_status_summary(user_id, is_premium, conn):
+    rows = conn.execute(
+        "SELECT action, started_at, ended_at, duration_seconds, notes FROM premium_history WHERE user_id = ? ORDER BY started_at ASC",
+        (user_id,)
+    ).fetchall()
+    
+    if not rows:
+        if is_premium:
+            return "Active (No history details)", "Unknown"
+        else:
+            return "Never VIP", "0s"
+            
+    total_seconds = 0
+    active_since = None
+    ever_premium = False
+    
+    for row in rows:
+        if row['action'] == 'grant':
+            ever_premium = True
+            start = parse_db_timestamp(row['started_at'])
+            if row['ended_at']:
+                end = parse_db_timestamp(row['ended_at'])
+                if start and end:
+                    total_seconds += (end - start).total_seconds()
+            else:
+                active_since = start
+                if start:
+                    total_seconds += (datetime.utcnow() - start).total_seconds()
+                    
+    duration_str = format_duration_seconds(total_seconds)
+    
+    if is_premium:
+        if active_since:
+            status_str = f"Active (since {active_since.strftime('%Y-%m-%d')})"
+        else:
+            status_str = "Active"
+    else:
+        if ever_premium:
+            status_str = "Inactive (Previously VIP)"
+        else:
+            status_str = "Never VIP"
+            
+    return status_str, duration_str
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    from werkzeug.exceptions import HTTPException
+    if isinstance(e, HTTPException):
+        if e.code != 500:
+            return e
+            
+    import traceback
+    error_type = type(e).__name__
+    message = str(e)
+    stack_trace = traceback.format_exc()
+    request_path = request.path
+    user_id = session.get('user_id')
+    
+    log_error_to_db(error_type, message, stack_trace, request_path, user_id)
+    
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "Internal Server Error", "message": message}), 500
+        
+    return "<h1>Internal Server Error</h1><p>An unexpected error occurred. It has been logged in the system error logs.</p>", 500
+
 def is_user_premium():
     user_id = session.get('user_id')
     if not user_id:
@@ -784,6 +938,208 @@ def submit_game():
 
 # ----------------- ADMIN API -----------------
 
+@app.route('/api/admin/users')
+def admin_get_users():
+    if session.get('username') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    conn = get_db_connection()
+    users = conn.execute("SELECT id, username, email, is_premium, created_at FROM users ORDER BY username ASC").fetchall()
+    
+    user_list = []
+    for u in users:
+        status_str, duration_str = get_premium_status_summary(u['id'], u['is_premium'], conn)
+        user_list.append({
+            "id": u['id'],
+            "username": u['username'],
+            "email": u['email'],
+            "is_premium": bool(u['is_premium']),
+            "created_at": u['created_at'],
+            "status_summary": status_str,
+            "duration_summary": duration_str
+        })
+        
+    conn.close()
+    return jsonify({"users": user_list})
+
+@app.route('/api/admin/users/edit', methods=['POST'])
+def admin_edit_user():
+    if session.get('username') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    data = request.json or {}
+    user_id = data.get('user_id')
+    new_username = data.get('username', '').strip()
+    new_email = data.get('email', '').strip() or None
+    
+    if not user_id or not new_username:
+        return jsonify({"error": "Missing user ID or username"}), 400
+        
+    conn = get_db_connection()
+    existing = conn.execute("SELECT id FROM users WHERE username = ? AND id != ?", (new_username, user_id)).fetchone()
+    if existing:
+        conn.close()
+        return jsonify({"error": "Username already taken."}), 400
+        
+    if new_email:
+        existing_email = conn.execute("SELECT id FROM users WHERE email = ? AND id != ?", (new_email, user_id)).fetchone()
+        if existing_email:
+            conn.close()
+            return jsonify({"error": "Email already in use."}), 400
+            
+    conn.execute(
+        "UPDATE users SET username = ?, email = ? WHERE id = ?",
+        (new_username, new_email, user_id)
+    )
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"status": "success", "message": "User details updated successfully."})
+
+@app.route('/api/admin/users/reset-password', methods=['POST'])
+def admin_reset_password():
+    if session.get('username') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    data = request.json or {}
+    user_id = data.get('user_id')
+    new_password = data.get('password', '').strip()
+    
+    if not user_id or not new_password:
+        return jsonify({"error": "Missing user ID or password"}), 400
+        
+    if len(new_password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters long."}), 400
+        
+    hashed = generate_password_hash(new_password)
+    conn = get_db_connection()
+    conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hashed, user_id))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"status": "success", "message": "User password reset successfully."})
+
+@app.route('/api/admin/users/toggle-premium', methods=['POST'])
+def admin_toggle_premium():
+    if session.get('username') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    data = request.json or {}
+    user_id = data.get('user_id')
+    make_premium = int(data.get('is_premium', 0))
+    notes = data.get('notes', '').strip() or None
+    
+    if user_id is None:
+        return jsonify({"error": "Missing user ID"}), 400
+        
+    conn = get_db_connection()
+    success, msg = toggle_user_premium(conn, user_id, make_premium, notes)
+    if not success:
+        conn.close()
+        return jsonify({"error": msg}), 400
+        
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success", "message": "VIP status toggled successfully."})
+
+@app.route('/api/admin/users/history')
+def admin_user_history():
+    if session.get('username') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Missing user ID"}), 400
+        
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT action, started_at, ended_at, duration_seconds, notes FROM premium_history WHERE user_id = ? ORDER BY started_at DESC",
+        (user_id,)
+    ).fetchall()
+    
+    history = []
+    for r in rows:
+        duration_str = "N/A"
+        if r['duration_seconds'] is not None:
+            duration_str = format_duration_seconds(r['duration_seconds'])
+        elif r['action'] == 'grant' and not r['ended_at']:
+            start = parse_db_timestamp(r['started_at'])
+            if start:
+                secs = int((datetime.utcnow() - start).total_seconds())
+                duration_str = format_duration_seconds(secs) + " (running)"
+                
+        history.append({
+            "action": r['action'],
+            "started_at": r['started_at'],
+            "ended_at": r['ended_at'],
+            "duration": duration_str,
+            "notes": r['notes']
+        })
+        
+    user = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+    username = user['username'] if user else "Unknown User"
+    
+    conn.close()
+    return jsonify({"username": username, "history": history})
+
+@app.route('/api/admin/errors')
+def admin_get_errors():
+    if session.get('username') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    conn = get_db_connection()
+    errors = conn.execute(
+        """
+        SELECT e.id, e.timestamp, e.error_type, e.message, e.stack_trace, e.request_path, u.username
+        FROM error_logs e
+        LEFT JOIN users u ON e.user_id = u.id
+        ORDER BY e.timestamp DESC
+        LIMIT 100
+        """
+    ).fetchall()
+    
+    error_list = []
+    for err in errors:
+        error_list.append({
+            "id": err['id'],
+            "timestamp": err['timestamp'],
+            "error_type": err['error_type'],
+            "message": err['message'],
+            "stack_trace": err['stack_trace'],
+            "request_path": err['request_path'],
+            "username": err['username'] or "Guest"
+        })
+        
+    conn.close()
+    return jsonify({"errors": error_list})
+
+@app.route('/api/admin/errors/delete', methods=['POST'])
+def admin_delete_error():
+    if session.get('username') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    data = request.json or {}
+    error_id = data.get('error_id')
+    if not error_id:
+        return jsonify({"error": "Missing error ID"}), 400
+        
+    conn = get_db_connection()
+    conn.execute("DELETE FROM error_logs WHERE id = ?", (error_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success", "message": "Error log deleted."})
+
+@app.route('/api/admin/errors/clear', methods=['POST'])
+def admin_clear_errors():
+    if session.get('username') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    conn = get_db_connection()
+    conn.execute("DELETE FROM error_logs")
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success", "message": "All error logs cleared."})
+
 @app.route('/api/admin/scrape')
 def admin_scrape():
     if session.get('username') != 'admin':
@@ -1268,10 +1624,15 @@ def subscribe():
         return jsonify({"error": "You must be logged in to subscribe."}), 401
     
     conn = get_db_connection()
-    conn.execute("UPDATE users SET is_premium = 1 WHERE id = ?", (user_id,))
+    success, msg = toggle_user_premium(conn, user_id, 1, "Subscribed via mock checkout")
     conn.commit()
     conn.close()
+    
+    if not success:
+        return jsonify({"error": msg}), 400
+        
     return jsonify({"status": "success", "message": "Successfully subscribed to Puck10 Premium!"})
+
 
 @app.route('/calendar')
 def calendar_page():

@@ -45,12 +45,9 @@
                         <a href="/profile" class="user-greeting">
                             <i class="fa-regular fa-user"></i> {{ session.get('username') }}
                             {% if is_premium %}
-                                <span class="premium-badge-text"><i class="fa-solid fa-crown"></i> Premium</span>
+                                <span class="premium-badge-text" style="color: #34d399;"><i class="fa-solid fa-star"></i> VIP</span>
                             {% endif %}
                         </a>
-                        {% if not is_premium %}
-                            <button onclick="showPremiumCheckoutModal()" class="btn btn-outline btn-xs btn-premium-nav" style="border-color: #eab308; color: #eab308;"><i class="fa-solid fa-crown"></i> Upgrade</button>
-                        {% endif %}
                         <a href="/logout" class="btn btn-outline btn-xs btn-logout">Logout</a>
                     </div>
                 {% else %}
@@ -88,98 +85,7 @@
         </div>
     </footer>
 
-    <!-- Premium Checkout Modal -->
-    <div id="premium-checkout-modal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); z-index: 1000; align-items: center; justify-content: center;">
-        <div class="modal-content" style="max-width: 480px; width: 90%; text-align: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 2.5rem; position: relative; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);">
-            <button class="modal-close" onclick="hidePremiumCheckoutModal()" style="position: absolute; top: 1rem; right: 1.25rem; font-size: 1.75rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">&times;</button>
-            <div style="font-size: 3rem; color: #eab308; margin-bottom: 1rem;">
-                <i class="fa-solid fa-crown"></i>
-            </div>
-            <h2 style="font-family: var(--font-display); font-size: 2rem; color: var(--text-primary); margin-bottom: 0.5rem;">Puck10 Premium</h2>
-            <p class="text-secondary" style="margin-bottom: 1.5rem; font-size: 0.95rem;">Unlock unlimited practice mode and play missed daily challenges for just $2.99/month.</p>
-            
-            <div style="text-align: left; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
-                <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem;">
-                    <li style="display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-circle-check" style="color: var(--success);"></i> <span>Unlimited Practice games</span></li>
-                    <li style="display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-circle-check" style="color: var(--success);"></i> <span>Play missed daily challenges</span></li>
-                    <li style="display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-circle-check" style="color: var(--success);"></i> <span>Keep your stats and streaks going</span></li>
-                </ul>
-            </div>
-            
-            <!-- Mock Credit Card Form -->
-            <form id="premium-checkout-form" onsubmit="handlePremiumCheckoutSubmit(event)">
-                <div class="form-group" style="text-align: left; margin-bottom: 1rem;">
-                    <label class="form-label" style="font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.25rem; display: block; color: var(--text-secondary);">Card Number</label>
-                    <div style="position: relative;">
-                        <input type="text" class="form-control" placeholder="4242 4242 4242 4242" required style="padding-left: 2.5rem; width: 100%; height: 2.75rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary);" value="4242 4242 4242 4242">
-                        <i class="fa-regular fa-credit-card" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
-                    <div class="form-group" style="flex: 1; text-align: left; margin-bottom: 0;">
-                        <label class="form-label" style="font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.25rem; display: block; color: var(--text-secondary);">Expiry</label>
-                        <input type="text" class="form-control" placeholder="MM/YY" required style="width: 100%; height: 2.75rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary);" value="12/29">
-                    </div>
-                    <div class="form-group" style="flex: 1; text-align: left; margin-bottom: 0;">
-                        <label class="form-label" style="font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.25rem; display: block; color: var(--text-secondary);">CVC</label>
-                        <input type="text" class="form-control" placeholder="123" required style="width: 100%; height: 2.75rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary);" value="123">
-                    </div>
-                </div>
-                
-                {% if not session.get('user_id') %}
-                    <div class="flash flash-error" style="margin-bottom: 1rem; font-size: 0.85rem; padding: 0.5rem 1rem; background: rgba(244, 63, 94, 0.1); border: 1px solid var(--accent); color: #fda4af; border-radius: 8px;">
-                        You must be logged in to upgrade.
-                    </div>
-                    <a href="/login" class="btn btn-primary" style="width: 100%; padding: 0.75rem;">Log In to Upgrade</a>
-                {% else %}
-                    <button type="submit" id="premium-submit-btn" class="btn btn-primary" style="width: 100%; padding: 0.75rem; background: linear-gradient(135deg, #eab308, #ca8a04); box-shadow: 0 4px 14px rgba(234, 179, 8, 0.3); border: none; font-weight: bold; border-radius: 8px; cursor: pointer; color: white;">
-                        Pay $2.99 / Month
-                    </button>
-                {% endif %}
-            </form>
-        </div>
-    </div>
-
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    <script>
-    function showPremiumCheckoutModal() {
-        document.getElementById('premium-checkout-modal').style.display = 'flex';
-    }
-    function hidePremiumCheckoutModal() {
-        document.getElementById('premium-checkout-modal').style.display = 'none';
-    }
-    async function handlePremiumCheckoutSubmit(e) {
-        e.preventDefault();
-        const btn = document.getElementById('premium-submit-btn');
-        if (btn) btn.disabled = true;
-        
-        try {
-            const response = await fetch('/api/subscribe', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            const data = await response.json();
-            if (data.status === 'success') {
-                if (typeof confetti === 'function') {
-                    confetti({
-                        particleCount: 150,
-                        spread: 80,
-                        origin: { y: 0.6 }
-                    });
-                }
-                alert('Congratulations! You are now a Puck10 Premium member.');
-                location.reload();
-            } else {
-                alert('Checkout failed: ' + (data.error || 'Unknown error'));
-            }
-        } catch (err) {
-            console.error('Checkout error:', err);
-            alert('An error occurred during checkout.');
-        } finally {
-            if (btn) btn.disabled = false;
-        }
-    }
-    </script>
 
     {% block extra_js %}{% endblock %}
 </body>

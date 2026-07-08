@@ -47,35 +47,35 @@
     </div>
 </div>
 
-<!-- Subscription Card -->
-<div class="card" style="margin-bottom: 2rem; border-color: {% if is_premium %}#eab308{% else %}var(--border){% endif %}; background: {% if is_premium %}linear-gradient(135deg, rgba(234, 179, 8, 0.05), rgba(30, 41, 59, 0.7)){% else %}var(--bg-card){% endif %};">
+<!-- Account Tier Card -->
+<div class="card" style="margin-bottom: 2rem; border-color: {% if is_premium %}var(--success){% else %}var(--border){% endif %}; background: {% if is_premium %}linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(30, 41, 59, 0.7)){% else %}var(--bg-card){% endif %};">
     <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1.5rem;">
         <div style="display: flex; gap: 1rem; align-items: center;">
-            <div style="font-size: 2.25rem; color: {% if is_premium %}#eab308{% else %}var(--text-muted){% endif %};">
-                <i class="fa-solid fa-crown"></i>
+            <div style="font-size: 2.25rem; color: {% if is_premium %}var(--success){% else %}var(--text-muted){% endif %};">
+                <i class="fa-solid fa-star"></i>
             </div>
             <div>
-                <h3 style="margin-bottom: 0.25rem; font-family: var(--font-display); font-size: 1.25rem; color: {% if is_premium %}#fef08a{% else %}var(--text-primary){% endif %};">
-                    Puck10 Premium Subscription
+                <h3 style="margin-bottom: 0.25rem; font-family: var(--font-display); font-size: 1.25rem; color: {% if is_premium %}#34d399{% else %}var(--text-primary){% endif %};">
+                    {% if is_premium %}VIP Access Tier{% else %}Standard Account Tier{% endif %}
                 </h3>
                 <p class="text-secondary" style="font-size: 0.9rem; margin-bottom: 0;">
                     {% if is_premium %}
-                        Active at $2.99/month. You have unlocked unlimited practice mode and missed days calendar play!
+                        Your account has VIP Access enabled. You have unlocked unlimited practice mode and access to all missed daily calendar challenges.
                     {% else %}
-                        Unlock calendar play for missed daily puzzles and unlimited practice mode for just $2.99/month.
+                        Your account is currently on the Standard tier. You have a daily limit of 3 practice mode games.
                     {% endif %}
                 </p>
             </div>
         </div>
         <div>
             {% if is_premium %}
-                <span class="status-badge" style="background: rgba(234, 179, 8, 0.15); color: #fef08a; font-weight: bold; padding: 0.5rem 1rem; border-radius: 8px; display: inline-flex; align-items: center; gap: 0.35rem;">
-                    <i class="fa-solid fa-circle-check"></i> Active
+                <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: bold; padding: 0.5rem 1rem; border-radius: 8px; display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid rgba(16, 185, 129, 0.25);">
+                    <i class="fa-solid fa-circle-check"></i> VIP Status Active
                 </span>
             {% else %}
-                <button onclick="showPremiumCheckoutModal()" class="btn btn-primary" style="background: linear-gradient(135deg, #eab308, #ca8a04); border: none; font-weight: bold; box-shadow: 0 4px 14px rgba(234, 179, 8, 0.3);">
-                    Upgrade for $2.99/mo
-                </button>
+                <span class="status-badge" style="background: rgba(100, 116, 139, 0.15); color: #94a3b8; font-weight: bold; padding: 0.5rem 1rem; border-radius: 8px; display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid rgba(100, 116, 139, 0.25);">
+                    <i class="fa-solid fa-user"></i> Standard Access
+                </span>
             {% endif %}
         </div>
     </div>

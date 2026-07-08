@@ -8,6 +8,9 @@ document.addEventListener("DOMContentLoaded", () => {
     initPracticeCache();
     initTableActions();
     initAutoFiller();
+    initAdminTabs();
+    initUserManagement();
+    initErrorLogs();
 });
 
 // Helper: Show status messages
@@ -588,10 +591,510 @@ function initAutoFiller() {
         } catch (err) {
             console.error("Error auto-filling schedule:", err);
             showAdminStatus("Network error auto-filling schedule.", "error");
-        } finally {
-            autofillBtn.disabled = false;
-            autofillBtn.innerHTML = originalHtml;
         }
     });
 }
+
+// Admin Tab Navigation
+function initAdminTabs() {
+    const tabBtns = document.querySelectorAll(".admin-tab-btn");
+    tabBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const targetTab = btn.dataset.tab;
+            
+            // Toggle buttons
+            tabBtns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            
+            // Toggle content panels
+            const contents = document.querySelectorAll(".admin-tab-content");
+            contents.forEach(c => c.classList.remove("active"));
+            
+            const targetContent = document.getElementById("tab-" + targetTab);
+            if (targetContent) {
+                targetContent.classList.add("active");
+            }
+            
+            // Load data when tab opens
+            if (targetTab === "users") {
+                loadAdminUsers();
+            } else if (targetTab === "errors") {
+                loadAdminErrors();
+            }
+        });
+    });
+}
+
+// User Management Logic
+let allUsersData = [];
+
+function initUserManagement() {
+    const searchBtn = document.getElementById("user-search-btn");
+    const searchInput = document.getElementById("user-search-input");
+    
+    if (searchBtn && searchInput) {
+        searchBtn.addEventListener("click", () => {
+            filterUsersTable(searchInput.value.trim());
+        });
+        searchInput.addEventListener("keyup", (e) => {
+            if (e.key === "Enter") {
+                filterUsersTable(searchInput.value.trim());
+            }
+        });
+    }
+    
+    const cancelUserEditBtn = document.getElementById("cancel-user-edit-btn");
+    if (cancelUserEditBtn) {
+        cancelUserEditBtn.addEventListener("click", () => {
+            document.getElementById("user-editor-section").style.display = "none";
+        });
+    }
+    
+    const cancelPasswordResetBtn = document.getElementById("cancel-password-reset-btn");
+    if (cancelPasswordResetBtn) {
+        cancelPasswordResetBtn.addEventListener("click", () => {
+            document.getElementById("password-reset-section").style.display = "none";
+        });
+    }
+    
+    const closeHistoryBtn = document.getElementById("close-history-btn");
+    if (closeHistoryBtn) {
+        closeHistoryBtn.addEventListener("click", () => {
+            document.getElementById("premium-history-section").style.display = "none";
+        });
+    }
+    
+    const saveUserBtn = document.getElementById("save-user-btn");
+    if (saveUserBtn) {
+        saveUserBtn.addEventListener("click", saveUserProfile);
+    }
+    
+    const savePasswordBtn = document.getElementById("save-password-btn");
+    if (savePasswordBtn) {
+        savePasswordBtn.addEventListener("click", saveUserPasswordDirect);
+    }
+}
+
+async function loadAdminUsers() {
+    const tbody = document.getElementById("admin-users-tbody");
+    if (!tbody) return;
+    
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-secondary"><i class="fa-solid fa-spinner fa-spin"></i> Loading user accounts...</td></tr>`;
+    
+    try {
+        const response = await fetch("/api/admin/users");
+        const data = await response.json();
+        
+        if (data.error) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-accent">Error loading users: ${data.error}</td></tr>`;
+            return;
+        }
+        
+        allUsersData = data.users || [];
+        populateUsersTable(allUsersData);
+    } catch (err) {
+        console.error("Error loading users:", err);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-accent">Network error loading users.</td></tr>`;
+    }
+}
+
+function populateUsersTable(users) {
+    const tbody = document.getElementById("admin-users-tbody");
+    if (!tbody) return;
+    
+    if (users.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-secondary">No user accounts found.</td></tr>`;
+        return;
+    }
+    
+    let html = "";
+    users.forEach(u => {
+        const badgeClass = u.is_premium ? "badge-active" : "badge-inactive";
+        const badgeIcon = u.is_premium ? `<i class="fa-solid fa-star"></i>` : `<i class="fa-solid fa-user"></i>`;
+        const accessLabel = u.is_premium ? "VIP" : "Standard";
+        
+        html += `
+            <tr>
+                <td style="vertical-align: middle;">${u.id}</td>
+                <td style="vertical-align: middle; font-weight: 600;">${u.username}</td>
+                <td style="vertical-align: middle;">${u.email || '<span class="text-secondary" style="font-style: italic; opacity: 0.5;">No Email</span>'}</td>
+                <td style="vertical-align: middle;">
+                    <span class="${badgeClass}">${badgeIcon} ${accessLabel}</span>
+                </td>
+                <td style="vertical-align: middle;">${u.duration_summary}</td>
+                <td style="vertical-align: middle; font-size: 0.85rem;" class="text-secondary">${u.created_at}</td>
+                <td style="vertical-align: middle;">
+                    <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                        <button class="btn btn-secondary btn-xs edit-user-btn" data-id="${u.id}" type="button">
+                            <i class="fa-solid fa-user-pen"></i> Edit
+                        </button>
+                        <button class="btn btn-secondary btn-xs reset-pw-btn" data-id="${u.id}" data-username="${u.username}" type="button">
+                            <i class="fa-solid fa-key"></i> Reset PW
+                        </button>
+                        <button class="btn btn-secondary btn-xs view-history-btn" data-id="${u.id}" type="button">
+                            <i class="fa-solid fa-clock-rotate-left"></i> History
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = html;
+    
+    tbody.querySelectorAll(".edit-user-btn").forEach(btn => {
+        btn.addEventListener("click", () => showUserEditor(btn.dataset.id));
+    });
+    tbody.querySelectorAll(".reset-pw-btn").forEach(btn => {
+        btn.addEventListener("click", () => showPasswordReset(btn.dataset.id, btn.dataset.username));
+    });
+    tbody.querySelectorAll(".view-history-btn").forEach(btn => {
+        btn.addEventListener("click", () => viewUserVipHistory(btn.dataset.id));
+    });
+}
+
+function filterUsersTable(query) {
+    if (!query) {
+        populateUsersTable(allUsersData);
+        return;
+    }
+    
+    const lower = query.toLowerCase();
+    const filtered = allUsersData.filter(u => {
+        return u.username.toLowerCase().includes(lower) || (u.email && u.email.toLowerCase().includes(lower));
+    });
+    populateUsersTable(filtered);
+}
+
+function showUserEditor(userId) {
+    const user = allUsersData.find(u => u.id == userId);
+    if (!user) return;
+    
+    document.getElementById("password-reset-section").style.display = "none";
+    document.getElementById("premium-history-section").style.display = "none";
+    
+    document.getElementById("edit-user-id").value = user.id;
+    document.getElementById("edit-username").value = user.username;
+    document.getElementById("edit-email").value = user.email || "";
+    document.getElementById("edit-premium-toggle").value = user.is_premium ? "1" : "0";
+    document.getElementById("edit-premium-notes").value = "";
+    
+    const sec = document.getElementById("user-editor-section");
+    sec.style.display = "block";
+    sec.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function showPasswordReset(userId, username) {
+    document.getElementById("user-editor-section").style.display = "none";
+    document.getElementById("premium-history-section").style.display = "none";
+    
+    document.getElementById("reset-user-id").value = userId;
+    document.getElementById("reset-username-display").textContent = username;
+    document.getElementById("reset-new-password").value = "";
+    
+    const sec = document.getElementById("password-reset-section");
+    sec.style.display = "block";
+    sec.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function viewUserVipHistory(userId) {
+    document.getElementById("user-editor-section").style.display = "none";
+    document.getElementById("password-reset-section").style.display = "none";
+    
+    const sec = document.getElementById("premium-history-section");
+    const tbody = document.getElementById("premium-history-tbody");
+    
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-secondary"><i class="fa-solid fa-spinner fa-spin"></i> Loading audit history...</td></tr>`;
+    document.getElementById("history-username-display").textContent = "...";
+    sec.style.display = "block";
+    sec.scrollIntoView({ behavior: "smooth", block: "start" });
+    
+    try {
+        const response = await fetch(`/api/admin/users/history?user_id=${userId}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-accent">Error: ${data.error}</td></tr>`;
+            return;
+        }
+        
+        document.getElementById("history-username-display").textContent = data.username || "User";
+        
+        if (!data.history || data.history.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-secondary">No VIP history logs found for this user.</td></tr>`;
+            return;
+        }
+        
+        let html = "";
+        data.history.forEach(h => {
+            const actionClass = h.action === "grant" ? "badge-active" : "badge-inactive";
+            const actionIcon = h.action === "grant" ? '<i class="fa-solid fa-star"></i>' : '<i class="fa-solid fa-user-slash"></i>';
+            const actionText = h.action === "grant" ? "VIP Grant" : "Revoke";
+            
+            html += `
+                <tr>
+                    <td style="vertical-align: middle;"><span class="${actionClass}">${actionIcon} ${actionText}</span></td>
+                    <td style="vertical-align: middle; font-size: 0.85rem;" class="text-secondary">${h.started_at}</td>
+                    <td style="vertical-align: middle; font-size: 0.85rem;" class="text-secondary">${h.ended_at || '<span class="text-secondary" style="font-style: italic; opacity: 0.5;">Current active run</span>'}</td>
+                    <td style="vertical-align: middle;">${h.duration}</td>
+                    <td style="vertical-align: middle; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${h.notes || '-'}</td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    } catch (err) {
+        console.error("Error loading history:", err);
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-accent">Network error loading VIP history.</td></tr>`;
+    }
+}
+
+async function saveUserProfile() {
+    const userId = document.getElementById("edit-user-id").value;
+    const username = document.getElementById("edit-username").value.trim();
+    const email = document.getElementById("edit-email").value.trim();
+    const isPremium = document.getElementById("edit-premium-toggle").value;
+    const notes = document.getElementById("edit-premium-notes").value.trim();
+    
+    if (!username) {
+        showAdminStatus("Username is required.", "error");
+        return;
+    }
+    
+    const saveBtn = document.getElementById("save-user-btn");
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Saving...`;
+    
+    try {
+        const profileRes = await fetch("/api/admin/users/edit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: userId, username, email })
+        });
+        const profileData = await profileRes.json();
+        
+        if (profileData.error) {
+            showAdminStatus("Failed to update profile: " + profileData.error, "error");
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Save Changes`;
+            return;
+        }
+        
+        const vipRes = await fetch("/api/admin/users/toggle-premium", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: userId, is_premium: parseInt(isPremium), notes })
+        });
+        const vipData = await vipRes.json();
+        
+        if (vipData.error) {
+            showAdminStatus("Profile saved, but failed to toggle VIP status: " + vipData.error, "warning");
+        } else {
+            showAdminStatus("User profile and VIP status updated successfully!", "success");
+        }
+        
+        document.getElementById("user-editor-section").style.display = "none";
+        loadAdminUsers();
+    } catch (err) {
+        console.error("Error saving user:", err);
+        showAdminStatus("Failed to save changes due to network error.", "error");
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Save Changes`;
+    }
+}
+
+async function saveUserPasswordDirect() {
+    const userId = document.getElementById("reset-user-id").value;
+    const password = document.getElementById("reset-new-password").value.trim();
+    
+    if (!password || password.length < 6) {
+        showAdminStatus("Password must be at least 6 characters long.", "error");
+        return;
+    }
+    
+    const saveBtn = document.getElementById("save-password-btn");
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Resetting...`;
+    
+    try {
+        const response = await fetch("/api/admin/users/reset-password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: userId, password })
+        });
+        const data = await response.json();
+        
+        if (data.error) {
+            showAdminStatus("Failed to reset password: " + data.error, "error");
+        } else {
+            showAdminStatus("Password has been reset successfully!", "success");
+            document.getElementById("password-reset-section").style.display = "none";
+            loadAdminUsers();
+        }
+    } catch (err) {
+        console.error("Error resetting password:", err);
+        showAdminStatus("Failed to reset password due to network error.", "error");
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = `<i class="fa-solid fa-key"></i> Update Password`;
+    }
+}
+
+// System Error Logs Logic
+let allErrorsData = [];
+
+function initErrorLogs() {
+    const clearBtn = document.getElementById("clear-all-errors-btn");
+    if (clearBtn) {
+        clearBtn.addEventListener("click", clearAllErrorLogs);
+    }
+    
+    const closeDetailsBtn = document.getElementById("close-error-details-btn");
+    if (closeDetailsBtn) {
+        closeDetailsBtn.addEventListener("click", () => {
+            document.getElementById("error-details-section").style.display = "none";
+        });
+    }
+    
+    const deleteLogBtn = document.getElementById("delete-error-log-btn");
+    if (deleteLogBtn) {
+        deleteLogBtn.addEventListener("click", deleteSelectedErrorLog);
+    }
+}
+
+async function loadAdminErrors() {
+    const tbody = document.getElementById("admin-errors-tbody");
+    if (!tbody) return;
+    
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-secondary"><i class="fa-solid fa-spinner fa-spin"></i> Loading system exceptions...</td></tr>`;
+    
+    try {
+        const response = await fetch("/api/admin/errors");
+        const data = await response.json();
+        
+        if (data.error) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-accent">Error loading logs: ${data.error}</td></tr>`;
+            return;
+        }
+        
+        allErrorsData = data.errors || [];
+        populateErrorsTable(allErrorsData);
+    } catch (err) {
+        console.error("Error loading error logs:", err);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-accent">Network error loading exception logs.</td></tr>`;
+    }
+}
+
+function populateErrorsTable(errors) {
+    const tbody = document.getElementById("admin-errors-tbody");
+    if (!tbody) return;
+    
+    if (errors.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-secondary">No system exceptions recorded.</td></tr>`;
+        return;
+    }
+    
+    let html = "";
+    errors.forEach(err => {
+        const shortMsg = err.message.length > 50 ? err.message.substring(0, 50) + "..." : err.message;
+        
+        html += `
+            <tr>
+                <td style="vertical-align: middle;">${err.id}</td>
+                <td style="vertical-align: middle; font-size: 0.85rem;" class="text-secondary">${err.timestamp}</td>
+                <td style="vertical-align: middle; font-family: monospace; color: var(--accent); font-weight: 600;">${err.error_type}</td>
+                <td style="vertical-align: middle; font-family: monospace; font-size: 0.85rem;">${err.request_path || '-'}</td>
+                <td style="vertical-align: middle; font-size: 0.9rem;" title="${err.message}">${shortMsg}</td>
+                <td style="vertical-align: middle; font-weight: 600;">${err.username}</td>
+                <td style="vertical-align: middle;">
+                    <button class="btn btn-secondary btn-xs view-error-btn" data-id="${err.id}" type="button">
+                        <i class="fa-solid fa-bug"></i> Trace
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = html;
+    
+    tbody.querySelectorAll(".view-error-btn").forEach(btn => {
+        btn.addEventListener("click", () => showExceptionDetails(btn.dataset.id));
+    });
+}
+
+function showExceptionDetails(logId) {
+    const err = allErrorsData.find(e => e.id == logId);
+    if (!err) return;
+    
+    document.getElementById("error-detail-id").textContent = err.id;
+    document.getElementById("error-detail-timestamp").textContent = err.timestamp;
+    document.getElementById("error-detail-type").textContent = err.error_type;
+    document.getElementById("error-detail-path").textContent = err.request_path || "-";
+    document.getElementById("error-detail-user").textContent = err.username;
+    document.getElementById("error-detail-message").textContent = err.message;
+    document.getElementById("error-detail-stack").textContent = err.stack_trace || "No stack trace recorded.";
+    
+    const sec = document.getElementById("error-details-section");
+    sec.style.display = "block";
+    sec.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function deleteSelectedErrorLog() {
+    const logId = document.getElementById("error-detail-id").textContent;
+    if (!logId) return;
+    
+    if (!confirm(`Are you sure you want to delete error log #${logId}?`)) return;
+    
+    const deleteBtn = document.getElementById("delete-error-log-btn");
+    deleteBtn.disabled = true;
+    
+    try {
+        const response = await fetch("/api/admin/errors/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ error_id: parseInt(logId) })
+        });
+        const data = await response.json();
+        
+        if (data.error) {
+            showAdminStatus("Failed to delete log: " + data.error, "error");
+        } else {
+            showAdminStatus(`Error log #${logId} deleted.`, "success");
+            document.getElementById("error-details-section").style.display = "none";
+            loadAdminErrors();
+        }
+    } catch (err) {
+        console.error("Error deleting log:", err);
+        showAdminStatus("Network error deleting log.", "error");
+    } finally {
+        deleteBtn.disabled = false;
+    }
+}
+
+async function clearAllErrorLogs() {
+    if (!confirm("Are you sure you want to purge ALL captured system exceptions? This cannot be undone.")) return;
+    
+    const clearBtn = document.getElementById("clear-all-errors-btn");
+    clearBtn.disabled = true;
+    
+    try {
+        const response = await fetch("/api/admin/errors/clear", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+        });
+        const data = await response.json();
+        
+        if (data.error) {
+            showAdminStatus("Failed to clear logs: " + data.error, "error");
+        } else {
+            showAdminStatus("All system exceptions cleared successfully!", "success");
+            document.getElementById("error-details-section").style.display = "none";
+            loadAdminErrors();
+        }
+    } catch (err) {
+        console.error("Error clearing logs:", err);
+        showAdminStatus("Network error clearing exception logs.", "error");
+    } finally {
+        clearBtn.disabled = false;
+    }
+}
+
 

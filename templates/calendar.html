@@ -8,20 +8,7 @@
     <span class="text-secondary" style="font-size: 0.9rem;">Play missed daily puzzles and complete your stats.</span>
 </div>
 
-{% if not is_premium %}
-<div class="card" style="background: linear-gradient(135deg, rgba(234, 179, 8, 0.08), rgba(202, 138, 4, 0.08)); border-color: rgba(234, 179, 8, 0.25); text-align: center; padding: 2.5rem 1.5rem;">
-    <div style="font-size: 2.5rem; color: #eab308; margin-bottom: 0.75rem;">
-        <i class="fa-solid fa-crown"></i>
-    </div>
-    <h3 style="color: #fef08a; font-family: var(--font-display); font-size: 1.5rem; margin-bottom: 0.5rem;">Upgrade to Puck10 Premium</h3>
-    <p class="text-secondary" style="max-width: 500px; margin: 0 auto 1.5rem; font-size: 0.95rem;">
-        Get access to all missed daily challenges. Going back and playing previous days updates your stats, streaks, and score history!
-    </p>
-    <button onclick="showPremiumCheckoutModal()" class="btn btn-primary" style="background: linear-gradient(135deg, #eab308, #ca8a04); border: none; font-weight: bold; box-shadow: 0 4px 14px rgba(234, 179, 8, 0.3);">
-        Unlock Calendar for $2.99 / Month
-    </button>
-</div>
-{% endif %}
+
 
 <div class="calendar-grid">
     {% for day in calendar_days %}
@@ -70,8 +57,8 @@
                             <i class="fa-solid fa-play"></i> Play Puzzle
                         </a>
                     {% else %}
-                        <button onclick="showPremiumCheckoutModal()" class="btn btn-secondary btn-sm" style="width: 100%; border-color: rgba(234,179,8,0.2); color: #fef08a;">
-                            <i class="fa-solid fa-lock" style="color: #eab308; font-size: 0.8rem; margin-right: 0.25rem;"></i> Unlock Play
+                        <button disabled class="btn btn-secondary btn-sm" style="width: 100%; opacity: 0.5; cursor: not-allowed;">
+                            <i class="fa-solid fa-lock" style="font-size: 0.8rem; margin-right: 0.25rem;"></i> Locked
                         </button>
                     {% endif %}
                 {% endif %}
