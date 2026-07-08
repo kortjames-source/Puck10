@@ -1,21 +1,33 @@
 #!/usr/bin/env python3
 import json
 import sys
-import scraper
-from app import FAMOUS_PLAYER_PIDS, get_db_connection
+import random
+from app import FAMOUS_PLAYER_NAMES, fetch_nhl_player, parse_nhl_player, get_db_connection
 
 def run():
-    print(f"Starting practice players cache refresh for {len(FAMOUS_PLAYER_PIDS)} players...")
+    # Select 15 random players from FAMOUS_PLAYER_NAMES
+    selected_names = random.sample(FAMOUS_PLAYER_NAMES, min(15, len(FAMOUS_PLAYER_NAMES)))
+    print(f"Starting practice players cache refresh for {len(selected_names)} random players...")
+    
     conn = get_db_connection()
+    # Clear old practice players to purge any "dumb" players
+    conn.execute("DELETE FROM practice_players")
+    conn.commit()
     
     success_count = 0
     failure_count = 0
     
-    for idx, pid in enumerate(FAMOUS_PLAYER_PIDS, 1):
-        print(f"[{idx}/{len(FAMOUS_PLAYER_PIDS)}] Scraping PID {pid}...", end="", flush=True)
+    for idx, p_name in enumerate(selected_names, 1):
+        print(f"[{idx}/{len(selected_names)}] Fetching details for {p_name}...", end="", flush=True)
         try:
-            details = scraper.scrape_player_details(pid)
-            if "error" not in details:
+            raw = fetch_nhl_player(p_name)
+            if raw:
+                parsed = parse_nhl_player(raw)
+                if parsed.get('seasons_played', 0) < 3:
+                    print(f" SKIPPED (only {parsed.get('seasons_played', 0)} seasons)")
+                    failure_count += 1
+                    continue
+                    
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO practice_players
@@ -23,26 +35,26 @@ def run():
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                     """,
                     (
-                        pid,
-                        details['name'],
-                        details['height'],
-                        details['weight'],
-                        details['nationality'],
-                        details['shoots'],
-                        details['position'],
-                        details['draft_status'],
-                        details['franchises_count'],
-                        json.dumps(details['teams_played']),
-                        json.dumps(details['milestones']),
-                        json.dumps(details['awards']),
-                        details['hockeydb_url']
+                        parsed['player_id'],
+                        parsed['name'],
+                        parsed['height'],
+                        parsed['weight'],
+                        parsed['nationality'],
+                        parsed['shoots'],
+                        parsed['position'],
+                        parsed['draft_status'],
+                        parsed['franchises_count'],
+                        json.dumps(parsed['teams_played']),
+                        json.dumps(parsed['milestones']),
+                        json.dumps(parsed['awards']),
+                        parsed['hockeydb_url']
                     )
                 )
                 conn.commit()
                 print(" SUCCESS")
                 success_count += 1
             else:
-                print(f" FAILED (scraper error: {details['error']})")
+                print(" FAILED (failed to fetch player details)")
                 failure_count += 1
         except Exception as e:
             print(f" ERROR ({e})")
@@ -51,7 +63,10 @@ def run():
     conn.close()
     print(f"Practice cache refresh complete. Successes: {success_count}, Failures: {failure_count}")
     if failure_count > 0:
-        sys.exit(1)
+        if success_count >= 10:
+            sys.exit(0)
+        else:
+            sys.exit(1)
     else:
         sys.exit(0)
 

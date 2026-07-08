@@ -59,12 +59,14 @@ def run():
 
         
     # Let's scrape and schedule players
-    # 1. Connor McDavid (PID 160293) for today
+    from app import fetch_nhl_player, parse_nhl_player
+
+    # 1. Connor McDavid for today
     today = date.today().strftime('%Y-%m-%d')
-    print(f"Scraping Connor McDavid (PID 160293) for today ({today})...")
-    mcdavid_data = scraper.scrape_player_details('160293')
-    
-    if "error" not in mcdavid_data:
+    print(f"Fetching Connor McDavid for today ({today})...")
+    raw_mcdavid = fetch_nhl_player("Connor McDavid")
+    if raw_mcdavid:
+        parsed_mcdavid = parse_nhl_player(raw_mcdavid)
         conn.execute(
             """
             INSERT OR REPLACE INTO daily_players 
@@ -73,30 +75,30 @@ def run():
             """,
             (
                 today,
-                mcdavid_data['name'],
-                mcdavid_data['height'],
-                mcdavid_data['weight'],
-                mcdavid_data['nationality'],
-                mcdavid_data['shoots'],
-                mcdavid_data['position'],
-                mcdavid_data['draft_status'],
-                mcdavid_data['franchises_count'],
-                json.dumps(mcdavid_data['teams_played']),
-                json.dumps(mcdavid_data['milestones']),
-                json.dumps(mcdavid_data['awards']),
-                mcdavid_data['hockeydb_url']
+                parsed_mcdavid['name'],
+                parsed_mcdavid['height'],
+                parsed_mcdavid['weight'],
+                parsed_mcdavid['nationality'],
+                parsed_mcdavid['shoots'],
+                parsed_mcdavid['position'],
+                parsed_mcdavid['draft_status'],
+                parsed_mcdavid['franchises_count'],
+                json.dumps(parsed_mcdavid['teams_played']),
+                json.dumps(parsed_mcdavid['milestones']),
+                json.dumps(parsed_mcdavid['awards']),
+                parsed_mcdavid['hockeydb_url']
             )
         )
         print(f"Scheduled Connor McDavid for {today}")
     else:
-        print(f"Error scraping McDavid: {mcdavid_data['error']}")
+        print("Error fetching McDavid from NHL API")
 
-    # 2. Wayne Gretzky (PID 2035) for tomorrow
+    # 2. Wayne Gretzky for tomorrow
     tomorrow = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
-    print(f"Scraping Wayne Gretzky (PID 2035) for tomorrow ({tomorrow})...")
-    gretzky_data = scraper.scrape_player_details('2035')
-    
-    if "error" not in gretzky_data:
+    print(f"Fetching Wayne Gretzky for tomorrow ({tomorrow})...")
+    raw_gretzky = fetch_nhl_player("Wayne Gretzky")
+    if raw_gretzky:
+        parsed_gretzky = parse_nhl_player(raw_gretzky)
         conn.execute(
             """
             INSERT OR REPLACE INTO daily_players 
@@ -105,60 +107,73 @@ def run():
             """,
             (
                 tomorrow,
-                gretzky_data['name'],
-                gretzky_data['height'],
-                gretzky_data['weight'],
-                gretzky_data['nationality'],
-                gretzky_data['shoots'],
-                gretzky_data['position'],
-                gretzky_data['draft_status'],
-                gretzky_data['franchises_count'],
-                json.dumps(gretzky_data['teams_played']),
-                json.dumps(gretzky_data['milestones']),
-                json.dumps(gretzky_data['awards']),
-                gretzky_data['hockeydb_url']
+                parsed_gretzky['name'],
+                parsed_gretzky['height'],
+                parsed_gretzky['weight'],
+                parsed_gretzky['nationality'],
+                parsed_gretzky['shoots'],
+                parsed_gretzky['position'],
+                parsed_gretzky['draft_status'],
+                parsed_gretzky['franchises_count'],
+                json.dumps(parsed_gretzky['teams_played']),
+                json.dumps(parsed_gretzky['milestones']),
+                json.dumps(parsed_gretzky['awards']),
+                parsed_gretzky['hockeydb_url']
             )
         )
         print(f"Scheduled Wayne Gretzky for {tomorrow}")
     else:
-        print(f"Error scraping Gretzky: {gretzky_data['error']}")
+        print("Error fetching Gretzky from NHL API")
         
     # Seed practice players
-    print("Seeding practice players table...")
+    print("Seeding practice players table with 15 random NHL players...")
     try:
-        fallback_pids = {
-            "Connor McDavid": "160293",
-            "Sidney Crosby": "72457",
-            "Alexander Ovechkin": "56358",
-            "Wayne Gretzky": "2035",
-            "Auston Matthews": "176228"
-        }
-        for p in FALLBACK_PLAYERS:
-            pid = fallback_pids.get(p['name'])
-            if pid:
+        import random
+        from app import FAMOUS_PLAYER_NAMES, fetch_nhl_player, parse_nhl_player
+        
+        # Clear existing practice players
+        conn.execute("DELETE FROM practice_players")
+        conn.commit()
+        
+        selected_names = random.sample(FAMOUS_PLAYER_NAMES, min(15, len(FAMOUS_PLAYER_NAMES)))
+        success_count = 0
+        for idx, p_name in enumerate(selected_names, 1):
+            print(f"[{idx}/{len(selected_names)}] Fetching details for {p_name}...", end="", flush=True)
+            raw = fetch_nhl_player(p_name)
+            if raw:
+                parsed = parse_nhl_player(raw)
+                if parsed.get('seasons_played', 0) < 3:
+                    print(f" SKIPPED (only {parsed.get('seasons_played', 0)} seasons)")
+                    continue
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO practice_players
-                    (pid, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (pid, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url, last_updated)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                     """,
                     (
-                        pid,
-                        p['name'],
-                        p['height'],
-                        p['weight'],
-                        p['nationality'],
-                        p['shoots'],
-                        p['position'],
-                        p['draft_status'],
-                        p['franchises_count'],
-                        json.dumps(p['teams_played']),
-                        json.dumps(p['milestones']),
-                        json.dumps(p['awards']),
-                        f"https://www.hockeydb.com/ihdb/stats/pdisplay.php?pid={pid}"
+                        parsed['player_id'],
+                        parsed['name'],
+                        parsed['height'],
+                        parsed['weight'],
+                        parsed['nationality'],
+                        parsed['shoots'],
+                        parsed['position'],
+                        parsed['draft_status'],
+                        parsed['franchises_count'],
+                        json.dumps(parsed['teams_played']),
+                        json.dumps(parsed['milestones']),
+                        json.dumps(parsed['awards']),
+                        parsed['hockeydb_url']
                     )
                 )
-        print("Successfully seeded practice players table.")
+                conn.commit()
+                print(" SUCCESS")
+                success_count += 1
+            else:
+                print(" FAILED")
+                
+        print(f"Successfully seeded {success_count} practice players.")
     except Exception as e:
         print(f"Error seeding practice players: {e}")
         
