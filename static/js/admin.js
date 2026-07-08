@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initEditorLists();
     initPracticeCache();
     initTableActions();
+    initAutoFiller();
 });
 
 // Helper: Show status messages
@@ -556,3 +557,39 @@ function initTableActions() {
         });
     });
 }
+
+function initAutoFiller() {
+    const autofillBtn = document.getElementById("auto-fill-schedule-btn");
+    if (!autofillBtn) return;
+    
+    autofillBtn.addEventListener("click", async () => {
+        if (!confirm("Are you sure you want to automatically fetch and fill the empty days of July? This can take 15-30 seconds.")) {
+            return;
+        }
+        
+        autofillBtn.disabled = true;
+        const originalHtml = autofillBtn.innerHTML;
+        autofillBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Seeding Schedule...`;
+        
+        try {
+            const res = await fetch("/api/admin/fill-schedule", { method: "POST" });
+            const data = await res.json();
+            
+            if (data.error) {
+                showAdminStatus("Error filling schedule: " + data.error, "error");
+            } else {
+                showAdminStatus(data.message || "Success! Schedule has been seeded.", "success");
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            }
+        } catch (err) {
+            console.error("Error auto-filling schedule:", err);
+            showAdminStatus("Network error auto-filling schedule.", "error");
+        } finally {
+            autofillBtn.disabled = false;
+            autofillBtn.innerHTML = originalHtml;
+        }
+    });
+}
+
