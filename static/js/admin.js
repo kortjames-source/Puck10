@@ -45,6 +45,12 @@ function initSearchForm() {
             const response = await fetch(`/api/admin/scrape?action=search&query=${encodeURIComponent(query)}`);
             const data = await response.json();
 
+            if (data.error) {
+                resultsContainer.innerHTML = `<p class="text-accent text-center" style="color: var(--accent);"><i class="fa-solid fa-triangle-exclamation"></i> Error: ${data.error}</p>`;
+                showAdminStatus(`Search failed: ${data.error}. You can still assign a player manually using the schedule table.`, "warning");
+                return;
+            }
+
             if (!data.results || data.results.length === 0) {
                 resultsContainer.innerHTML = `<p class="text-secondary text-center">No players found matching "${query}".</p>`;
                 return;

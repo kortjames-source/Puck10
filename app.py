@@ -560,6 +560,8 @@ def admin_scrape():
     if action == 'search':
         query = request.args.get('query', '')
         results = scraper.search_player_id(query)
+        if isinstance(results, dict) and "error" in results:
+            return jsonify(results), 500
         return jsonify({"results": results})
         
     elif action == 'details':

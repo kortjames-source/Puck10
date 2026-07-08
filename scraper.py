@@ -104,7 +104,7 @@ def search_player_id(name):
     try:
         resp = requests.get(url, headers=headers, allow_redirects=True, timeout=10)
         if resp.status_code != 200:
-            return []
+            return {"error": f"Failed to search HockeyDB, status code {resp.status_code}"}
             
         # If redirected directly to profile page
         if "pdisplay.php" in resp.url:
@@ -152,7 +152,7 @@ def search_player_id(name):
         return results
     except Exception as e:
         print(f"Error searching HockeyDB: {e}")
-        return []
+        return {"error": str(e)}
 
 def scrape_player_details(pid):
     """
