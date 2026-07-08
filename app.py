@@ -1161,7 +1161,8 @@ def admin_fill_schedule():
                 "name": name, "height": height, "weight": weight, "nationality": nationality,
                 "shoots": shoots, "position": position, "draft_status": draft_status,
                 "franchises_count": franchises_count, "teams_played": teams_played,
-                "milestones": milestones, "awards": awards_list, "hockeydb_url": hockeydb_url
+                "milestones": milestones, "awards": awards_list, "hockeydb_url": hockeydb_url,
+                "player_id": str(player_id)
             }
 
         conn = get_db_connection()
@@ -1180,6 +1181,19 @@ def admin_fill_schedule():
             if raw:
                 parsed = parse_nhl_player(raw)
                 players_data.append(parsed)
+                # Save directly to practice_players table to keep cache rich
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO practice_players
+                    (pid, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url, last_updated)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """,
+                    (
+                        parsed['player_id'], parsed['name'], parsed['height'], parsed['weight'], parsed['nationality'], parsed['shoots'],
+                        parsed['position'], parsed['draft_status'], parsed['franchises_count'], json.dumps(parsed['teams_played']),
+                        json.dumps(parsed['milestones']), json.dumps(parsed['awards']), parsed['hockeydb_url']
+                    )
+                )
                 
         if not players_data:
             conn.close()
