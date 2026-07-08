@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS user_stats (
     wrong_guesses INTEGER NOT NULL,
     bet_round INTEGER, -- 1 to 10 or NULL
     won INTEGER NOT NULL, -- 1 for win, 0 for loss
+    guesses TEXT, -- JSON array of guesses
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE(user_id, date)

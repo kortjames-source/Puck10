@@ -120,14 +120,16 @@ class Puck10PremiumTestCase(unittest.TestCase):
         self.assertTrue(data.get("correct"))
         self.assertEqual(data.get("player_name"), player['name'] if player else "Sidney Crosby")
 
-        # 8. Submit results for yesterday's game
+        # 8. Submit results for yesterday's game with guesses list
+        guess_history = ['Wrong Player Name', player['name'] if player else 'Sidney Crosby']
         response = self.client.post('/api/submit-game', json={
             'score': 160,
             'clues_revealed': 5,
             'wrong_guesses': 1,
             'bet_round': None,
             'won': 1,
-            'date': yesterday_str
+            'date': yesterday_str,
+            'guesses': guess_history
         })
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
@@ -140,6 +142,14 @@ class Puck10PremiumTestCase(unittest.TestCase):
         self.assertIsNotNone(stat)
         self.assertEqual(stat['score'], 160)
         self.assertEqual(stat['won'], 1)
+        self.assertEqual(json.loads(stat['guesses']), guess_history)
+
+        # Call get_daily_player again to verify played_data has correct guesses list
+        response = self.client.get(f'/api/daily-player?date={yesterday_str}')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data.get("played"))
+        self.assertEqual(data.get("played_data", {}).get("guesses"), guess_history)
 
     def test_guess_with_null_or_empty_date(self):
         # Verify that API handles null or empty date gracefully without throwing 500 error

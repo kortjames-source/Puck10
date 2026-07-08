@@ -66,7 +66,8 @@ let gameState = {
     clues: [],
     completed: false,
     won: false,
-    finalScore: 0
+    finalScore: 0,
+    guesses: []
 };
 
 // DOM Elements
@@ -263,7 +264,7 @@ function getGuestLifetimeStats() {
     };
 }
 
-function saveLocalGuestGame(won, score, cluesRevealed, wrongGuesses, betRound, playerName) {
+function saveLocalGuestGame(won, score, cluesRevealed, wrongGuesses, betRound, playerName, guesses = []) {
     const stats = getGuestStats();
     const date = getGameDate();
     stats.history[date] = {
@@ -272,7 +273,8 @@ function saveLocalGuestGame(won, score, cluesRevealed, wrongGuesses, betRound, p
         clues_revealed: cluesRevealed,
         wrong_guesses: wrongGuesses,
         bet_round: betRound,
-        player_name: playerName
+        player_name: playerName,
+        guesses: guesses
     };
     localStorage.setItem("puck10_guest_stats", JSON.stringify(stats));
 }
@@ -326,7 +328,7 @@ async function checkDailyPlay() {
 
 function showAlreadyPlayed(playedData) {
     if (prebetContainer) prebetContainer.style.display = "none";
-    if (gameContainer) gameContainer.style.display = "none";
+    if (gameContainer) gameContainer.style.display = "grid";
     
     // Set state
     gameState.completed = true;
@@ -335,9 +337,104 @@ function showAlreadyPlayed(playedData) {
     gameState.currentRound = playedData.clues_revealed;
     gameState.wrongGuesses = playedData.wrong_guesses;
     gameState.betRound = playedData.bet_round;
+    gameState.guesses = playedData.guesses || [];
+
+    // Show previous guesses
+    renderGuesses();
+
+    // Update scoreboard
+    updateScoreboard();
+
+    // Reveal all 10 clues
+    for (let i = 1; i <= 10; i++) {
+        revealClue(i);
+    }
+
+    // Update the guess card area
+    updateGuessCardForCompleted(gameState.won, playedData.player_name);
 
     // Show modal results
     showResultsModal(playedData.player_name, playedData.headshot_url);
+}
+
+function renderGuesses() {
+    const guessesContainer = document.getElementById("guesses-container");
+    const guessesList = document.getElementById("guesses-list");
+    if (!guessesContainer || !guessesList) return;
+
+    if (!gameState.guesses || gameState.guesses.length === 0) {
+        guessesContainer.style.display = "none";
+        return;
+    }
+
+    guessesContainer.style.display = "block";
+    guessesList.innerHTML = "";
+
+    gameState.guesses.forEach((guessName, index) => {
+        const isLast = index === gameState.guesses.length - 1;
+        const isCorrect = gameState.won && isLast;
+
+        const item = document.createElement("div");
+        item.style.display = "flex";
+        item.style.justifyContent = "space-between";
+        item.style.alignItems = "center";
+        item.style.padding = "0.5rem 0.75rem";
+        item.style.borderRadius = "8px";
+        item.style.fontSize = "0.9rem";
+        
+        if (isCorrect) {
+            item.style.background = "rgba(34, 197, 94, 0.08)";
+            item.style.border = "1px solid rgba(34, 197, 94, 0.2)";
+            item.innerHTML = `
+                <span style="font-weight: 600; color: #22c55e;">${guessName}</span>
+                <span style="color: #22c55e; font-size: 0.8rem; font-weight: 600;"><i class="fa-solid fa-circle-check"></i> Correct</span>
+            `;
+        } else {
+            item.style.background = "rgba(239, 68, 68, 0.08)";
+            item.style.border = "1px solid rgba(239, 68, 68, 0.2)";
+            item.innerHTML = `
+                <span style="font-weight: 500; color: var(--text-secondary);">${guessName}</span>
+                <span style="color: var(--accent); font-size: 0.8rem;"><i class="fa-solid fa-circle-xmark"></i> Incorrect</span>
+            `;
+        }
+        
+        guessesList.appendChild(item);
+    });
+}
+
+function updateGuessCardForCompleted(won, correctPlayer) {
+    const guessBox = document.querySelector(".guess-box");
+    const actionButtons = document.querySelector(".action-buttons");
+    if (guessBox) guessBox.style.display = "none";
+    if (actionButtons) actionButtons.style.display = "none";
+    
+    let statusMsg = document.getElementById("game-status-completed");
+    if (!statusMsg) {
+        statusMsg = document.createElement("div");
+        statusMsg.id = "game-status-completed";
+        statusMsg.style.marginTop = "1rem";
+        statusMsg.style.textAlign = "center";
+        
+        const guessCard = document.querySelector(".guess-card");
+        if (guessCard) {
+            guessCard.appendChild(statusMsg);
+        }
+    }
+    
+    const textColor = won ? "#22c55e" : "#ef4444";
+    const statusText = won ? "SUCCESS!" : "GAME OVER";
+    
+    statusMsg.innerHTML = `
+        <div style="font-family: var(--font-display); font-size: 1.25rem; font-weight: 700; color: ${textColor}; margin-bottom: 0.5rem;">
+            ${statusText}
+        </div>
+        <div class="text-secondary" style="font-size: 0.9rem; margin-bottom: 0.5rem;">
+            Mystery Player:
+        </div>
+        <div style="font-family: var(--font-sans); font-size: 1.5rem; font-weight: 700; color: var(--text-primary);">
+            ${correctPlayer}
+        </div>
+    `;
 }
 
 function startGame() {
@@ -383,24 +480,19 @@ function updateScoreboard() {
     }
 }
 
-function revealRoundClue() {
-    if (gameState.currentRound > 10) {
-        endGame(false);
-        return;
-    }
-
-    // Find clue item element and reveal it
-    const clueItem = document.getElementById(`clue-item-${gameState.currentRound}`);
+function revealClue(roundNum) {
+    const clueItem = document.getElementById(`clue-item-${roundNum}`);
     if (clueItem) {
         clueItem.classList.remove("unrevealed");
         clueItem.classList.add("revealed");
 
         const content = clueItem.querySelector(".clue-content");
         if (content) {
-            const rawClue = gameState.clues[gameState.currentRound - 1];
+            const rawClue = gameState.clues[roundNum - 1];
+            if (!rawClue) return;
             
             // Special styling for teams (Clue 8) or milestones (Clue 9)
-            if (gameState.currentRound === 8) {
+            if (roundNum === 8) {
                 // Show logos
                 try {
                     const teams = JSON.parse(rawClue);
@@ -417,7 +509,7 @@ function revealRoundClue() {
                 } catch {
                     content.innerText = rawClue;
                 }
-            } else if (gameState.currentRound === 9 || gameState.currentRound === 10) {
+            } else if (roundNum === 9 || roundNum === 10) {
                 // JSON list format
                 try {
                     const list = JSON.parse(rawClue);
@@ -429,7 +521,7 @@ function revealRoundClue() {
                 } catch {
                     content.innerText = rawClue;
                 }
-            } else if (gameState.currentRound === 3) {
+            } else if (roundNum === 3) {
                 const flag = getCountryFlag(rawClue);
                 content.innerText = flag ? `${flag} ${rawClue}` : rawClue;
             } else {
@@ -437,6 +529,14 @@ function revealRoundClue() {
             }
         }
     }
+}
+
+function revealRoundClue() {
+    if (gameState.currentRound > 10) {
+        endGame(false);
+        return;
+    }
+    revealClue(gameState.currentRound);
 }
 
 function skipClue() {
@@ -471,10 +571,14 @@ async function submitGuess() {
         const data = await response.json();
 
         if (data.correct) {
+            gameState.guesses.push(data.player_name);
+            renderGuesses();
             endGame(true, data.player_name, data.headshot_url);
         } else {
             // Incorrect guess
             gameState.wrongGuesses++;
+            gameState.guesses.push(guessValue);
+            renderGuesses();
             showToast("Incorrect Guess! -5 points", "error");
             guessInput.value = "";
             updateScoreboard();
@@ -547,7 +651,8 @@ async function endGame(won, playerName = "", headshotUrl = "") {
                 wrong_guesses: gameState.wrongGuesses,
                 bet_round: gameState.betRound,
                 won: won ? 1 : 0,
-                date: targetDate
+                date: targetDate,
+                guesses: gameState.guesses
             })
         });
         const data = await response.json();
@@ -555,8 +660,16 @@ async function endGame(won, playerName = "", headshotUrl = "") {
         // Show actual player name from submit API if not passed
         const finalPlayerName = playerName || data.player_name;
 
+        // Reveal all 10 clues
+        for (let i = 1; i <= 10; i++) {
+            revealClue(i);
+        }
+
+        // Update the guess card area
+        updateGuessCardForCompleted(won, finalPlayerName);
+
         if (data.status === "guest_success") {
-            saveLocalGuestGame(won, gameState.finalScore, gameState.currentRound, gameState.wrongGuesses, gameState.betRound, finalPlayerName);
+            saveLocalGuestGame(won, gameState.finalScore, gameState.currentRound, gameState.wrongGuesses, gameState.betRound, finalPlayerName, gameState.guesses);
             gameState.lifetimeStats = getGuestLifetimeStats();
         } else if (data.lifetime_stats) {
             gameState.lifetimeStats = data.lifetime_stats;

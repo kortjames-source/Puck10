@@ -116,6 +116,13 @@ def init_db():
     except sqlite3.OperationalError:
         conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
         conn.commit()
+
+    # Check if user_stats table has guesses column, if not add it
+    try:
+        conn.execute("SELECT guesses FROM user_stats LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE user_stats ADD COLUMN guesses TEXT")
+        conn.commit()
         
     conn.close()
 
@@ -770,6 +777,10 @@ def get_daily_player():
         
         if stats:
             played = True
+            try:
+                guesses_list = json.loads(stats['guesses']) if stats['guesses'] else []
+            except Exception:
+                guesses_list = []
             played_data = {
                 "score": stats['score'],
                 "clues_revealed": stats['clues_revealed'],
@@ -777,7 +788,8 @@ def get_daily_player():
                 "bet_round": stats['bet_round'],
                 "won": stats['won'],
                 "player_name": player['name'],
-                "headshot_url": get_player_headshot_url(player['name'])
+                "headshot_url": get_player_headshot_url(player['name']),
+                "guesses": guesses_list
             }
             
     conn.close()
@@ -895,6 +907,7 @@ def submit_game():
     wrong_guesses = data.get('wrong_guesses', 0)
     bet_round = data.get('bet_round') # Can be null
     won = data.get('won', 0)
+    guesses = data.get('guesses', []) # List of guess strings
     
     conn = get_db_connection()
     
@@ -910,16 +923,17 @@ def submit_game():
     try:
         conn.execute(
             """
-            INSERT INTO user_stats (user_id, date, score, clues_revealed, wrong_guesses, bet_round, won)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO user_stats (user_id, date, score, clues_revealed, wrong_guesses, bet_round, won, guesses)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, date) DO UPDATE SET
                 score=excluded.score,
                 clues_revealed=excluded.clues_revealed,
                 wrong_guesses=excluded.wrong_guesses,
                 bet_round=excluded.bet_round,
-                won=excluded.won
+                won=excluded.won,
+                guesses=excluded.guesses
             """,
-            (user_id, target_date, score, clues_revealed, wrong_guesses, bet_round, won)
+            (user_id, target_date, score, clues_revealed, wrong_guesses, bet_round, won, json.dumps(guesses))
         )
         conn.commit()
         
