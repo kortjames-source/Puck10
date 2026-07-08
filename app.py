@@ -110,6 +110,13 @@ def init_db():
         conn.execute("ALTER TABLE users ADD COLUMN is_premium INTEGER DEFAULT 0")
         conn.commit()
         
+    # Check if users table has email column, if not add it
+    try:
+        conn.execute("SELECT email FROM users LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
+        conn.commit()
+        
     conn.close()
 
 
@@ -264,10 +271,155 @@ def login():
             
     return render_template('login.html')
 
+# SMTP Email Settings
+SMTP_SERVER = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
+SMTP_USERNAME = os.environ.get('SMTP_USERNAME')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD')
+MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@puck10.com')
+
+def send_reset_email(email, reset_url):
+    subject = "Reset Your Puck10 Password"
+    body = f"""Hi there,
+
+You requested a password reset for your Puck10 account. 
+Please click the link below to reset your password (valid for 1 hour):
+
+{reset_url}
+
+If you did not make this request, please ignore this email.
+
+Thanks,
+Puck10 Team"""
+
+    # If no SMTP credentials, log/print it and return False
+    if not SMTP_USERNAME or not SMTP_PASSWORD:
+        print("\n=== [DEVELOPMENT RESET LINK] ===")
+        print(f"To: {email}")
+        print(f"Link: {reset_url}")
+        print("================================\n")
+        return False
+
+    try:
+        from email.mime.text import MIMEText
+        import smtplib
+        
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['From'] = MAIL_DEFAULT_SENDER
+        msg['To'] = email
+        
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.sendmail(MAIL_DEFAULT_SENDER, [email], msg.as_string())
+        return True
+    except Exception as e:
+        print(f"Error sending reset email: {e}")
+        print(f"Fallback link to: {email} -> {reset_url}")
+        return False
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        if not email:
+            flash('Please enter your email address.', 'error')
+            return render_template('forgot_password.html')
+            
+        conn = get_db_connection()
+        user = conn.execute("SELECT id, username FROM users WHERE email = ?", (email,)).fetchone()
+        
+        if user:
+            # Generate a secure token
+            import secrets
+            token = secrets.token_urlsafe(32)
+            
+            # Set expiry to 1 hour from now
+            expires_at = (datetime.now() + timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S')
+            
+            conn.execute(
+                "INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)",
+                (user['id'], token, expires_at)
+            )
+            conn.commit()
+            
+            # Generate absolute reset URL
+            reset_url = url_for('reset_password', token=token, _external=True)
+            
+            # Try sending email
+            sent = send_reset_email(email, reset_url)
+            
+            if not sent:
+                # In development/debug/test mode, flash the link directly to make testing simple
+                if app.debug or app.testing:
+                    flash(f"[DEV MODE] Reset link: {reset_url}", "info")
+                    
+        conn.close()
+        
+        # Always flash the same generic success message to prevent user enumeration
+        flash('If that email is registered, a password reset link has been sent.', 'success')
+        return redirect(url_for('login'))
+        
+    return render_template('forgot_password.html')
+
+@app.route('/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    token = request.args.get('token') or request.form.get('token')
+    if not token:
+        flash('Invalid reset link or missing token.', 'error')
+        return redirect(url_for('login'))
+        
+    conn = get_db_connection()
+    # Find active token
+    reset = conn.execute(
+        "SELECT * FROM password_resets WHERE token = ? AND used = 0 AND expires_at > ?",
+        (token, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    ).fetchone()
+    
+    if not reset:
+        conn.close()
+        flash('This reset link is invalid, expired, or has already been used.', 'error')
+        return redirect(url_for('login'))
+        
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm = request.form.get('confirm_password')
+        
+        if not password or not confirm:
+            conn.close()
+            flash('All fields are required.', 'error')
+            return render_template('reset_password.html', token=token)
+            
+        if password != confirm:
+            conn.close()
+            flash('Passwords do not match.', 'error')
+            return render_template('reset_password.html', token=token)
+            
+        if len(password) < 6:
+            conn.close()
+            flash('Password must be at least 6 characters long.', 'error')
+            return render_template('reset_password.html', token=token)
+            
+        hashed = generate_password_hash(password)
+        
+        # Update user's password and mark token as used
+        conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hashed, reset['user_id']))
+        conn.execute("UPDATE password_resets SET used = 1 WHERE id = ?", (reset['id'],))
+        conn.commit()
+        conn.close()
+        
+        flash('Your password has been reset successfully. Please log in with your new password.', 'success')
+        return redirect(url_for('login'))
+        
+    conn.close()
+    return render_template('reset_password.html', token=token)
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         username = request.form['username'].strip()
+        email = request.form['email'].strip()
         password = request.form['password']
         confirm = request.form['confirm_password']
         
@@ -275,22 +427,35 @@ def register():
             flash('Username must be at least 3 characters.', 'error')
             return render_template('register.html')
             
+        if not email or '@' not in email or '.' not in email:
+            flash('Please enter a valid email address.', 'error')
+            return render_template('register.html')
+            
         if password != confirm:
             flash('Passwords do not match.', 'error')
             return render_template('register.html')
             
         conn = get_db_connection()
-        existing = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
-        if existing:
+        
+        # Check if username exists
+        existing_username = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        if existing_username:
             conn.close()
             flash('Username already exists.', 'error')
+            return render_template('register.html')
+            
+        # Check if email exists
+        existing_email = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        if existing_email:
+            conn.close()
+            flash('Email address is already registered.', 'error')
             return render_template('register.html')
             
         hashed = generate_password_hash(password)
         try:
             cursor = conn.execute(
-                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                (username, hashed)
+                "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+                (username, email, hashed)
             )
             conn.commit()
             

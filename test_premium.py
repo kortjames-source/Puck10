@@ -13,16 +13,18 @@ class Puck10PremiumTestCase(unittest.TestCase):
         
         # Set up test database or clean test users
         conn = get_db_connection()
-        conn.execute("DELETE FROM users WHERE username = 'test_premium_user'")
-        conn.execute("DELETE FROM user_stats WHERE user_id IN (SELECT id FROM users WHERE username = 'test_premium_user')")
+        conn.execute("DELETE FROM users WHERE username IN ('test_premium_user', 'recovery_test_user')")
+        conn.execute("DELETE FROM user_stats WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user'))")
+        conn.execute("DELETE FROM password_resets WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user'))")
         conn.commit()
         conn.close()
 
     def tearDown(self):
         # Cleanup
         conn = get_db_connection()
-        conn.execute("DELETE FROM users WHERE username = 'test_premium_user'")
-        conn.execute("DELETE FROM user_stats WHERE user_id IN (SELECT id FROM users WHERE username = 'test_premium_user')")
+        conn.execute("DELETE FROM users WHERE username IN ('test_premium_user', 'recovery_test_user')")
+        conn.execute("DELETE FROM user_stats WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user'))")
+        conn.execute("DELETE FROM password_resets WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user'))")
         conn.commit()
         conn.close()
 
@@ -30,6 +32,7 @@ class Puck10PremiumTestCase(unittest.TestCase):
         # 1. Register a new user
         response = self.client.post('/register', data={
             'username': 'test_premium_user',
+            'email': 'test_premium_user@example.com',
             'password': 'password123',
             'confirm_password': 'password123'
         }, follow_redirects=True)
@@ -190,6 +193,7 @@ class Puck10PremiumTestCase(unittest.TestCase):
         # 1. Register a new user
         response = self.client.post('/register', data={
             'username': 'test_premium_user',
+            'email': 'test_premium_user@example.com',
             'password': 'password123',
             'confirm_password': 'password123'
         }, follow_redirects=True)
@@ -241,6 +245,76 @@ class Puck10PremiumTestCase(unittest.TestCase):
         self.client.get('/logout')
         response = self.client.post('/login', data={
             'username': 'test_premium_user',
+            'password': 'newpassword123'
+        }, follow_redirects=True)
+        self.assertIn(b'Successfully logged in!', response.data)
+
+    def test_password_recovery_flow(self):
+        # 1. Register a new user
+        response = self.client.post('/register', data={
+            'username': 'recovery_test_user',
+            'email': 'recovery@example.com',
+            'password': 'password123',
+            'confirm_password': 'password123'
+        }, follow_redirects=True)
+        self.assertEqual(response.status_code, 200)
+        
+        self.client.get('/logout')
+        
+        # 2. Request password reset URL
+        response = self.client.post('/forgot-password', data={
+            'email': 'recovery@example.com'
+        }, follow_redirects=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'If that email is registered, a password reset link has been sent.', response.data)
+        
+        # Fetch the token from DB
+        conn = get_db_connection()
+        reset_row = conn.execute("SELECT token FROM password_resets ORDER BY id DESC LIMIT 1").fetchone()
+        conn.close()
+        self.assertIsNotNone(reset_row)
+        token = reset_row['token']
+        
+        # 3. Request reset page with invalid token
+        response = self.client.get('/reset-password?token=invalid_token', follow_redirects=True)
+        self.assertIn(b'This reset link is invalid, expired, or has already been used.', response.data)
+        
+        # 4. Request reset page with valid token
+        response = self.client.get(f'/reset-password?token={token}', follow_redirects=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Reset Password', response.data)
+        
+        # 5. POST to reset page with mismatching passwords
+        response = self.client.post(f'/reset-password?token={token}', data={
+            'password': 'newpassword123',
+            'confirm_password': 'mismatchingpassword'
+        }, follow_redirects=True)
+        self.assertIn(b'Passwords do not match', response.data)
+        
+        # 6. POST to reset page with too short password
+        response = self.client.post(f'/reset-password?token={token}', data={
+            'password': 'short',
+            'confirm_password': 'short'
+        }, follow_redirects=True)
+        self.assertIn(b'Password must be at least 6 characters long', response.data)
+        
+        # 7. POST to reset page with valid new password
+        response = self.client.post(f'/reset-password?token={token}', data={
+            'password': 'newpassword123',
+            'confirm_password': 'newpassword123'
+        }, follow_redirects=True)
+        self.assertIn(b'Your password has been reset successfully. Please log in with your new password.', response.data)
+        
+        # 8. Try logging in with the old password (must fail)
+        response = self.client.post('/login', data={
+            'username': 'recovery_test_user',
+            'password': 'password123'
+        }, follow_redirects=True)
+        self.assertIn(b'Invalid username or password.', response.data)
+        
+        # 9. Log in with the new password (must succeed)
+        response = self.client.post('/login', data={
+            'username': 'recovery_test_user',
             'password': 'newpassword123'
         }, follow_redirects=True)
         self.assertIn(b'Successfully logged in!', response.data)
