@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Puck10 Clues{% endblock %}
+
+{% block content %}
+<div class="card-title">
+    <h2>Admin Dashboard</h2>
+    <span class="text-secondary" style="font-size: 0.9rem;">Configure daily players and schedule calendar days.</span>
+</div>
+
+<!-- Status Message Placeholder -->
+<div id="admin-status-message" class="flash" style="display: none; margin-bottom: 1.5rem;"></div>
+
+<div class="charts-container" style="margin-top: 0;">
+    <!-- Search / Fetch Box -->
+    <div class="card">
+        <h3 class="card-title">HockeyDB Fetcher</h3>
+        
+        <!-- Search Form -->
+        <div class="form-group">
+            <label class="form-label" for="search-player-name">Search Player Name</label>
+            <div style="display: flex; gap: 0.5rem;">
+                <input type="text" id="search-player-name" class="form-control" placeholder="e.g. Wayne Gretzky">
+                <button id="search-hockeydb-btn" class="btn btn-primary" type="button">
+                    <i class="fa-solid fa-magnifying-glass"></i> Search
+                </button>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin: 1rem 0; color: var(--text-muted);">--- OR ---</div>
+
+        <!-- PID Direct Fetch Form -->
+        <div class="form-group">
+            <label class="form-label" for="scrape-player-pid">Fetch directly by HockeyDB ID (PID)</label>
+            <div style="display: flex; gap: 0.5rem;">
+                <input type="number" id="scrape-player-pid" class="form-control" placeholder="e.g. 2035">
+                <button id="scrape-pid-btn" class="btn btn-secondary" type="button">
+                    <i class="fa-solid fa-cloud-arrow-down"></i> Fetch PID
+                </button>
+            </div>
+        </div>
+
+        <!-- Search Results List -->
+        <div id="search-results-list" class="admin-search-results">
+            <!-- Results populated dynamically by javascript -->
+        </div>
+    </div>
+
+    <!-- Scheduled Days Calendar -->
+    <div class="card">
+        <h3 class="card-title">Current Schedule</h3>
+        <div class="schedule-table-wrapper" style="max-height: 400px; overflow-y: auto;">
+            {% if schedule %}
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Player Name</th>
+                        <th>Position</th>
+                        <th>Teams</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in schedule %}
+                    <tr>
+                        <td class="text-secondary" style="white-space: nowrap;">{{ item.date }}</td>
+                        <td style="font-weight: 600; color: var(--primary);">{{ item.name }}</td>
+                        <td>{{ item.position }}</td>
+                        <td>{{ item.franchises_count }} teams</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-secondary text-center" style="padding: 2rem 0;">No players scheduled yet. Fetch and schedule your first player!</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Practice Cache Control -->
+<div class="card" style="margin-top: 2rem;">
+    <h3 class="card-title">Practice Mode Cache</h3>
+    <p class="text-secondary" style="margin-bottom: 1.5rem;">
+        Players for Practice Mode are served from a local database cache to prevent hitting HockeyDB rate limits during play.
+    </p>
+    <div style="display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+        <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">Total Cached Players</label>
+            <div id="practice-cache-count" style="font-size: 1.5rem; font-weight: 600; color: var(--primary); margin-top: 0.25rem;">Loading...</div>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">Last Updated</label>
+            <div id="practice-cache-updated" style="font-size: 1.5rem; font-weight: 600; color: var(--primary); margin-top: 0.25rem;">Loading...</div>
+        </div>
+    </div>
+    <div>
+        <button id="refresh-practice-cache-btn" class="btn btn-secondary" type="button">
+            <i class="fa-solid fa-arrows-rotate"></i> Rebuild Cache (Background)
+        </button>
+    </div>
+</div>
+
+<!-- Player Details Editor Form (Initially Hidden) -->
+<div id="player-editor-section" class="card" style="display: none;">
+    <h3 class="card-title" style="color: var(--primary); border-bottom-color: var(--primary-glow);">
+        Player Clues & Info Editor
+    </h3>
+
+    <form id="player-editor-form" onsubmit="event.preventDefault();">
+        <div class="admin-editor-grid">
+            <div class="form-group">
+                <label class="form-label" for="editor-player-name">Player Name (Target Answer)</label>
+                <input type="text" id="editor-player-name" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="editor-height">Height (Clue 1)</label>
+                <input type="text" id="editor-height" class="form-control" placeholder="e.g. 6' 1&quot;">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="editor-weight">Weight (Clue 2)</label>
+                <input type="text" id="editor-weight" class="form-control" placeholder="e.g. 194 lbs">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="editor-nationality">Nationality / Country of Birth (Clue 3)</label>
+                <input type="text" id="editor-nationality" class="form-control" placeholder="e.g. Canada">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="editor-shoots">Shoots Hand (Clue 4)</label>
+                <select id="editor-shoots" class="form-control">
+                    <option value="">-- Select --</option>
+                    <option value="L">L (Left)</option>
+                    <option value="R">R (Right)</option>
+                    <option value="UNKNOWN">UNKNOWN</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="editor-position">Position played (Clue 5)</label>
+                <input type="text" id="editor-position" class="form-control" placeholder="e.g. Center">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="editor-draft">Draft Status (Clue 6)</label>
+                <input type="text" id="editor-draft" class="form-control" placeholder="e.g. 2015 Round 1 #1 overall by Edmonton Oilers">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="editor-franchises">Number of NHL Franchises played for (Clue 7)</label>
+                <input type="number" id="editor-franchises" class="form-control" placeholder="e.g. 1">
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 1rem;">
+            <label class="form-label" for="editor-url">HockeyDB Url (Reference)</label>
+            <input type="text" id="editor-url" class="form-control" readonly>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
+
+        <!-- Clue 8: Teams List Editor -->
+        <div class="form-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <label class="form-label" style="margin-bottom: 0;">NHL Teams & Logos (Clue 8)</label>
+                <button type="button" id="add-team-btn" class="btn btn-secondary btn-sm"><i class="fa-solid fa-plus"></i> Add Team</button>
+            </div>
+            <div id="teams-editor-list" class="teams-editor-list">
+                <!-- Team rows appended here by JS -->
+            </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
+
+        <!-- Clue 9: Milestones List Editor -->
+        <div class="form-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <label class="form-label" style="margin-bottom: 0;">Career Milestones (Clue 9)</label>
+                <button type="button" id="add-milestone-btn" class="btn btn-secondary btn-sm"><i class="fa-solid fa-plus"></i> Add Milestone</button>
+            </div>
+            <div id="milestones-editor-list">
+                <!-- Milestone rows appended here by JS -->
+            </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
+
+        <!-- Clue 10: Awards List Editor -->
+        <div class="form-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <label class="form-label" style="margin-bottom: 0;">Specific Awards Won (Clue 10)</label>
+                <button type="button" id="add-award-btn" class="btn btn-secondary btn-sm"><i class="fa-solid fa-plus"></i> Add Award</button>
+            </div>
+            <div id="awards-editor-list">
+                <!-- Award rows appended here by JS -->
+            </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
+
+        <!-- Scheduler Date and Save -->
+        <div class="card" style="background: rgba(255, 255, 255, 0.02); margin-top: 2rem; padding: 1.5rem;">
+            <div style="display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-end;">
+                <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                    <label class="form-label" for="schedule-date">Select Game Date</label>
+                    <input type="date" id="schedule-date" class="form-control" value="{{ current_date }}">
+                </div>
+                <div style="margin-bottom: 0;">
+                    <button type="button" id="save-schedule-btn" class="btn btn-primary" style="padding: 0.75rem 2rem;">
+                        <i class="fa-solid fa-calendar-check"></i> Save to Schedule
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}

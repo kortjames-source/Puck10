@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Puck10 Clues{% endblock %}
+
+{% block content %}
+<div style="max-width: 420px; margin: 3rem auto;">
+    <div class="card">
+        <h2 class="text-center" style="font-size: 2rem; margin-bottom: 0.5rem; font-family: var(--font-display);">Welcome Back</h2>
+        <p class="text-secondary text-center" style="margin-bottom: 2rem;">Sign in to save your streaks, scores, and track your daily progress.</p>
+        
+        <form method="POST" action="/login">
+            <div class="form-group">
+                <label for="username" class="form-label">Username</label>
+                <input type="text" id="username" name="username" class="form-control" placeholder="Enter your username" required autofocus>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 2rem;">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" id="password" name="password" class="form-control" placeholder="Enter your password" required>
+            </div>
+            
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem 1.5rem; font-size: 1.1rem; margin-bottom: 1.5rem;">
+                <i class="fa-solid fa-right-to-bracket"></i> Login
+            </button>
+        </form>
+        
+        <p class="text-secondary text-center" style="font-size: 0.9rem;">
+            Don't have an account? <a href="/register" style="font-weight: 600;">Sign Up</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

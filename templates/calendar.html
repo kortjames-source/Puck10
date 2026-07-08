@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Calendar Archive - Puck10 Clues{% endblock %}
+
+{% block content %}
+<div class="card-title">
+    <h2>Puzzle Calendar Archive</h2>
+    <span class="text-secondary" style="font-size: 0.9rem;">Play missed daily puzzles and complete your stats.</span>
+</div>
+
+{% if not is_premium %}
+<div class="card" style="background: linear-gradient(135deg, rgba(234, 179, 8, 0.08), rgba(202, 138, 4, 0.08)); border-color: rgba(234, 179, 8, 0.25); text-align: center; padding: 2.5rem 1.5rem;">
+    <div style="font-size: 2.5rem; color: #eab308; margin-bottom: 0.75rem;">
+        <i class="fa-solid fa-crown"></i>
+    </div>
+    <h3 style="color: #fef08a; font-family: var(--font-display); font-size: 1.5rem; margin-bottom: 0.5rem;">Upgrade to Puck10 Premium</h3>
+    <p class="text-secondary" style="max-width: 500px; margin: 0 auto 1.5rem; font-size: 0.95rem;">
+        Get access to all missed daily challenges. Going back and playing previous days updates your stats, streaks, and score history!
+    </p>
+    <button onclick="showPremiumCheckoutModal()" class="btn btn-primary" style="background: linear-gradient(135deg, #eab308, #ca8a04); border: none; font-weight: bold; box-shadow: 0 4px 14px rgba(234, 179, 8, 0.3);">
+        Unlock Calendar for $2.99 / Month
+    </button>
+</div>
+{% endif %}
+
+<div class="calendar-grid">
+    {% for day in calendar_days %}
+        <div class="calendar-card {% if day.played %}{% if day.won %}played-win{% else %}played-loss{% endif %}{% else %}missed{% endif %}">
+            <div class="calendar-date-header">
+                <i class="fa-regular fa-calendar"></i> {{ day.formatted_date }}
+            </div>
+            
+            <div class="calendar-status-content">
+                {% if day.played %}
+                    {% if day.won %}
+                        <div class="status-badge win">
+                            <i class="fa-solid fa-circle-check"></i> Completed
+                        </div>
+                        <div class="calendar-score-info">
+                            <span>Score: {{ day.score }} pts</span>
+                            <span style="font-size: 0.8rem; color: var(--text-muted);">Clues: {{ day.clues_revealed }}/10</span>
+                        </div>
+                    {% else %}
+                        <div class="status-badge loss">
+                            <i class="fa-solid fa-circle-xmark"></i> Failed
+                        </div>
+                        <div class="calendar-score-info">
+                            <span>Score: {{ day.score }} pts</span>
+                            <span style="font-size: 0.8rem; color: var(--text-muted);">Clues: {{ day.clues_revealed }}/10</span>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="status-badge missed-badge">
+                        <i class="fa-regular fa-circle"></i> Missed
+                    </div>
+                    <div class="calendar-score-info">
+                        <span style="color: var(--text-muted);">Stats incomplete</span>
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="calendar-action-wrapper">
+                {% if day.played %}
+                    <a href="/?date={{ day.date }}" class="btn btn-secondary btn-sm" style="width: 100%;">
+                        <i class="fa-solid fa-magnifying-glass"></i> View Results
+                    </a>
+                {% else %}
+                    {% if is_premium %}
+                        <a href="/?date={{ day.date }}" class="btn btn-primary btn-sm" style="width: 100%;">
+                            <i class="fa-solid fa-play"></i> Play Puzzle
+                        </a>
+                    {% else %}
+                        <button onclick="showPremiumCheckoutModal()" class="btn btn-secondary btn-sm" style="width: 100%; border-color: rgba(234,179,8,0.2); color: #fef08a;">
+                            <i class="fa-solid fa-lock" style="color: #eab308; font-size: 0.8rem; margin-right: 0.25rem;"></i> Unlock Play
+                        </button>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+<style>
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+.calendar-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 170px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    transition: all var(--transition-fast);
+}
+.calendar-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-hover);
+}
+.calendar-card.played-win {
+    border-left: 4px solid var(--success);
+}
+.calendar-card.played-loss {
+    border-left: 4px solid var(--accent);
+}
+.calendar-card.missed {
+    border-left: 4px solid var(--text-muted);
+}
+.calendar-date-header {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.calendar-status-content {
+    margin: 1rem 0;
+}
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+}
+.status-badge.win {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+}
+.status-badge.loss {
+    background: rgba(244, 63, 94, 0.1);
+    color: var(--accent);
+}
+.status-badge.missed-badge {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-secondary);
+}
+.calendar-score-info {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+}
+.calendar-action-wrapper {
+    margin-top: 0.5rem;
+}
+</style>
+{% endblock %}
