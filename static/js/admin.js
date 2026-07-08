@@ -71,7 +71,7 @@ function initSearchForm() {
             loadBtns.forEach(btn => {
                 btn.addEventListener("click", () => {
                     const pid = btn.dataset.pid;
-                    fetchPlayerDetails(pid);
+                    fetchPlayerDetails(pid, btn);
                 });
             });
 
@@ -100,18 +100,20 @@ function initScrapeForm() {
             showAdminStatus("Please enter a valid HockeyDB Player ID.", "error");
             return;
         }
-        fetchPlayerDetails(pid);
+        fetchPlayerDetails(pid, scrapeBtn);
     });
 }
 
-async function fetchPlayerDetails(pid) {
+async function fetchPlayerDetails(pid, clickedBtn = null) {
     const editorSection = document.getElementById("player-editor-section");
-    const scrapeBtn = document.getElementById("scrape-pid-btn");
     if (!editorSection) return;
 
-    if (scrapeBtn) {
-        scrapeBtn.disabled = true;
-        scrapeBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Loading...`;
+    const loadingIndicator = clickedBtn || document.getElementById("scrape-pid-btn");
+    let originalText = "";
+    if (loadingIndicator) {
+        loadingIndicator.disabled = true;
+        originalText = loadingIndicator.innerHTML;
+        loadingIndicator.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Loading...`;
     }
 
     try {
@@ -119,7 +121,11 @@ async function fetchPlayerDetails(pid) {
         const data = await response.json();
 
         if (data.error) {
-            showAdminStatus(`Error fetching details: ${data.error}`, "error");
+            showAdminStatus(`Failed to fetch details from HockeyDB: ${data.error}. You can fill out the clues manually below.`, "warning");
+            
+            // Show editor panel anyway so they can input manually
+            editorSection.style.display = "block";
+            editorSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
             return;
         }
 
@@ -146,11 +152,15 @@ async function fetchPlayerDetails(pid) {
         showAdminStatus(`Player "${data.name}" details loaded successfully!`, "success");
     } catch (err) {
         console.error("Error loading player details:", err);
-        showAdminStatus("Failed to fetch player details from HockeyDB.", "error");
+        showAdminStatus("Failed to fetch player details from HockeyDB. You can fill out the clues manually below.", "warning");
+        
+        // Show editor panel anyway
+        editorSection.style.display = "block";
+        editorSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } finally {
-        if (scrapeBtn) {
-            scrapeBtn.disabled = false;
-            scrapeBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i> Scrape PID`;
+        if (loadingIndicator) {
+            loadingIndicator.disabled = false;
+            loadingIndicator.innerHTML = originalText;
         }
     }
 }
