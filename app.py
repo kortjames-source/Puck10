@@ -921,6 +921,32 @@ def admin_schedule():
             """,
             (date_val, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url)
         )
+        
+        # Extract pid for practice_players
+        import re
+        import hashlib
+        pid = None
+        if hockeydb_url:
+            m = re.search(r'pid=(\d+)', hockeydb_url)
+            if m:
+                pid = m.group(1)
+            else:
+                m2 = re.search(r'-(\d+)$', hockeydb_url.strip())
+                if m2:
+                    pid = m2.group(1)
+        if not pid:
+            pid = hashlib.md5(name.encode('utf-8')).hexdigest()[:10]
+            
+        # Write to practice_players to keep cache rich
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO practice_players
+            (pid, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url, last_updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """,
+            (pid, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url)
+        )
+        
         conn.commit()
         conn.close()
         return jsonify({"status": "success"})
@@ -1418,8 +1444,24 @@ def get_random_player():
             
     player_details = None
     try:
+        # Avoid showing players upcoming in the next 90 days (including today)
+        today = date.today()
+        future_limit = today + timedelta(days=90)
+        today_str_sql = today.strftime('%Y-%m-%d')
+        future_limit_str_sql = future_limit.strftime('%Y-%m-%d')
+        
         conn = get_db_connection()
-        row = conn.execute("SELECT * FROM practice_players ORDER BY RANDOM() LIMIT 1").fetchone()
+        row = conn.execute(
+            """
+            SELECT * FROM practice_players 
+            WHERE name NOT IN (
+                SELECT name FROM daily_players 
+                WHERE date >= ? AND date <= ?
+            )
+            ORDER BY RANDOM() LIMIT 1
+            """,
+            (today_str_sql, future_limit_str_sql)
+        ).fetchone()
         conn.close()
         
         if row:
