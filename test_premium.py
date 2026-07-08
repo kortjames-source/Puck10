@@ -186,5 +186,64 @@ class Puck10PremiumTestCase(unittest.TestCase):
         data = json.loads(response.data)
         self.assertEqual(data.get("status"), "started")
 
+    def test_password_update_flow(self):
+        # 1. Register a new user
+        response = self.client.post('/register', data={
+            'username': 'test_premium_user',
+            'password': 'password123',
+            'confirm_password': 'password123'
+        }, follow_redirects=True)
+        self.assertEqual(response.status_code, 200)
+        
+        # Logout
+        self.client.get('/logout')
+        
+        # Login
+        response = self.client.post('/login', data={
+            'username': 'test_premium_user',
+            'password': 'password123'
+        }, follow_redirects=True)
+        self.assertEqual(response.status_code, 200)
+        
+        # 2. Try to update password with incorrect current password
+        response = self.client.post('/profile/update-password', data={
+            'current_password': 'wrongpassword',
+            'new_password': 'newpassword123',
+            'confirm_password': 'newpassword123'
+        }, follow_redirects=True)
+        self.assertIn(b'Incorrect current password', response.data)
+        
+        # 3. Try to update password with mismatching new passwords
+        response = self.client.post('/profile/update-password', data={
+            'current_password': 'password123',
+            'new_password': 'newpassword123',
+            'confirm_password': 'differentnewpassword'
+        }, follow_redirects=True)
+        self.assertIn(b'New passwords do not match', response.data)
+        
+        # 4. Try to update password with new password too short
+        response = self.client.post('/profile/update-password', data={
+            'current_password': 'password123',
+            'new_password': 'short',
+            'confirm_password': 'short'
+        }, follow_redirects=True)
+        self.assertIn(b'Password must be at least 6 characters long', response.data)
+        
+        # 5. Update password with correct info
+        response = self.client.post('/profile/update-password', data={
+            'current_password': 'password123',
+            'new_password': 'newpassword123',
+            'confirm_password': 'newpassword123'
+        }, follow_redirects=True)
+        self.assertIn(b'Password updated successfully', response.data)
+        
+        # 6. Logout and login with the new password
+        self.client.get('/logout')
+        response = self.client.post('/login', data={
+            'username': 'test_premium_user',
+            'password': 'newpassword123'
+        }, follow_redirects=True)
+        self.assertIn(b'Successfully logged in!', response.data)
+
 if __name__ == '__main__':
     unittest.main()

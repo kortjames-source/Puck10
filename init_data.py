@@ -7,6 +7,34 @@ from app import FALLBACK_PLAYERS
 
 DATABASE = 'nhl10clues.db'
 
+def get_secure_admin_password():
+    # 1. Check environment variable
+    password = os.environ.get('ADMIN_PASSWORD')
+    if password:
+        return password
+    
+    # 2. Check .env file
+    if os.path.exists('.env'):
+        try:
+            with open('.env', 'r') as f:
+                for line in f:
+                    if line.strip().startswith('ADMIN_PASSWORD='):
+                        val = line.strip().split('=', 1)[1].strip()
+                        if val.startswith(('"', "'")) and val.endswith(('"', "'")):
+                            val = val[1:-1]
+                        if val:
+                            return val
+        except Exception as e:
+            print(f"Error reading .env: {e}")
+            
+    # 3. Generate dynamic cryptographically secure password
+    import secrets
+    new_password = secrets.token_urlsafe(12) # ~16 characters
+    print(f"GENERATED SECURE ADMIN PASSWORD: {new_password}")
+    print("WARNING: This password is generated in-memory and will change on next restart if not saved in environment or .env!")
+    return new_password
+
+
 def run():
     print("Initializing Database...")
     if not os.path.exists(DATABASE):
@@ -22,11 +50,13 @@ def run():
     from werkzeug.security import generate_password_hash
     admin = conn.execute("SELECT * FROM users WHERE username = 'admin'").fetchone()
     if not admin:
+        admin_pass = get_secure_admin_password()
         conn.execute(
             "INSERT INTO users (username, password_hash) VALUES ('admin', ?)",
-            (generate_password_hash('admin'),)
+            (generate_password_hash(admin_pass),)
         )
-        print("Created default admin user (username: admin, password: admin)")
+        print(f"Created default admin user (username: admin, password: {admin_pass})")
+
         
     # Let's scrape and schedule players
     # 1. Connor McDavid (PID 160293) for today

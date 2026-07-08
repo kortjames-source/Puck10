@@ -56,6 +56,34 @@ def get_player_headshot_url(player_name):
         print(f"Error fetching headshot for {player_name}: {e}")
     return None
 
+def get_secure_admin_password():
+    # 1. Check environment variable
+    password = os.environ.get('ADMIN_PASSWORD')
+    if password:
+        return password
+    
+    # 2. Check .env file
+    if os.path.exists('.env'):
+        try:
+            with open('.env', 'r') as f:
+                for line in f:
+                    if line.strip().startswith('ADMIN_PASSWORD='):
+                        val = line.strip().split('=', 1)[1].strip()
+                        if val.startswith(('"', "'")) and val.endswith(('"', "'")):
+                            val = val[1:-1]
+                        if val:
+                            return val
+        except Exception as e:
+            print(f"Error reading .env: {e}")
+            
+    # 3. Generate dynamic cryptographically secure password
+    import secrets
+    new_password = secrets.token_urlsafe(12) # ~16 characters
+    print(f"GENERATED SECURE ADMIN PASSWORD: {new_password}")
+    print("WARNING: This password is generated in-memory and will change on next restart if not saved in environment or .env!")
+    return new_password
+
+
 def init_db():
     if not os.path.exists(DATABASE):
         # Create database file
@@ -68,9 +96,10 @@ def init_db():
     # Check if default admin exists, if not create it
     admin_user = conn.execute("SELECT * FROM users WHERE username = ?", ('admin',)).fetchone()
     if not admin_user:
+        admin_pass = get_secure_admin_password()
         conn.execute(
             "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-            ('admin', generate_password_hash('admin'))
+            ('admin', generate_password_hash(admin_pass))
         )
         conn.commit()
         
@@ -82,6 +111,7 @@ def init_db():
         conn.commit()
         
     conn.close()
+
 
 # Initialize DB on start
 init_db()
@@ -313,6 +343,44 @@ def profile():
     stats = get_user_stats_summary(user_id)
     
     return render_template('profile.html', stats=stats, signup_date=signup_date, history=history)
+
+@app.route('/profile/update-password', methods=['POST'])
+def update_password():
+    if not session.get('user_id'):
+        return redirect(url_for('login'))
+        
+    current_password = request.form.get('current_password')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+    
+    if not current_password or not new_password or not confirm_password:
+        flash('All fields are required.', 'error')
+        return redirect(url_for('profile'))
+        
+    if new_password != confirm_password:
+        flash('New passwords do not match.', 'error')
+        return redirect(url_for('profile'))
+        
+    if len(new_password) < 6:
+        flash('Password must be at least 6 characters long.', 'error')
+        return redirect(url_for('profile'))
+        
+    user_id = session['user_id']
+    conn = get_db_connection()
+    user = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,)).fetchone()
+    
+    if not user or not check_password_hash(user['password_hash'], current_password):
+        conn.close()
+        flash('Incorrect current password.', 'error')
+        return redirect(url_for('profile'))
+        
+    hashed = generate_password_hash(new_password)
+    conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hashed, user_id))
+    conn.commit()
+    conn.close()
+    
+    flash('Password updated successfully!', 'success')
+    return redirect(url_for('profile'))
 
 @app.route('/admin')
 def admin():
