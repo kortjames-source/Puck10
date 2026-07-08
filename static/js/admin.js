@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // Helper: Show status messages
-function showAdminStatus(message, type = "info") {
+function showAdminStatus(message, type = "info", shouldScroll = true) {
     const statusDiv = document.getElementById("admin-status-message");
     if (statusDiv) {
         statusDiv.className = `flash flash-${type}`;
@@ -19,7 +19,9 @@ function showAdminStatus(message, type = "info") {
         statusDiv.innerHTML = `<span class="flash-text">${message}</span><button class="flash-close" onclick="this.parentElement.style.display='none'">&times;</button>`;
         
         // Scroll to message
-        statusDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        if (shouldScroll) {
+            statusDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
     }
 }
 
@@ -156,7 +158,7 @@ async function fetchPlayerDetails(pid, clickedBtn = null) {
         editorSection.style.display = "block";
         editorSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-        showAdminStatus(`Player "${data.name}" details loaded successfully!`, "success");
+        showAdminStatus(`Player "${data.name}" details loaded successfully!`, "success", false);
     } catch (err) {
         console.error("Error loading player details:", err);
         showAdminStatus("Failed to fetch player details from HockeyDB. You can fill out the clues manually below.", "warning");
@@ -457,7 +459,7 @@ function initTableActions() {
                 editorSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
             
-            showAdminStatus(`Ready to assign player to date: ${dateVal}`, "info");
+            showAdminStatus(`Ready to assign player to date: ${dateVal}`, "info", false);
         });
     });
 
@@ -506,7 +508,7 @@ function initTableActions() {
                 editorSection.style.display = "block";
                 editorSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-                showAdminStatus(`Loaded "${data.name}" details for ${dateVal}.`, "success");
+                showAdminStatus(`Loaded "${data.name}" details for ${dateVal}.`, "success", false);
             } catch (err) {
                 console.error("Error loading player details for editing:", err);
                 showAdminStatus("Failed to load player details from schedule.", "error");
