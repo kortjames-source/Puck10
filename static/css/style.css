@@ -136,6 +136,15 @@ a:hover {
 .user-greeting {
     font-size: 0.875rem;
     color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.user-greeting:hover {
+    color: var(--primary);
 }
 
 /* Main Content Area */

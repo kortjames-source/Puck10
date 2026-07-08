@@ -34,7 +34,7 @@
                 </a>
                 {% if session.get('user_id') %}
                     <a href="/profile" class="nav-link {% if request.path == '/profile' %}active{% endif %}">
-                        <i class="fa-solid fa-chart-simple"></i> Stats
+                        <i class="fa-solid fa-user"></i> Account
                     </a>
                     {% if session.get('username') == 'admin' %}
                         <a href="/admin" class="nav-link {% if request.path == '/admin' %}active{% endif %}">
@@ -42,12 +42,12 @@
                         </a>
                     {% endif %}
                     <div class="user-menu">
-                        <span class="user-greeting">
+                        <a href="/profile" class="user-greeting">
                             <i class="fa-regular fa-user"></i> {{ session.get('username') }}
                             {% if is_premium %}
                                 <span class="premium-badge-text"><i class="fa-solid fa-crown"></i> Premium</span>
                             {% endif %}
-                        </span>
+                        </a>
                         {% if not is_premium %}
                             <button onclick="showPremiumCheckoutModal()" class="btn btn-outline btn-xs btn-premium-nav" style="border-color: #eab308; color: #eab308;"><i class="fa-solid fa-crown"></i> Upgrade</button>
                         {% endif %}
