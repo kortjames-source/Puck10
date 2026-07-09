@@ -264,7 +264,7 @@ function getGuestLifetimeStats() {
     };
 }
 
-function saveLocalGuestGame(won, score, cluesRevealed, wrongGuesses, betRound, playerName, guesses = []) {
+function saveLocalGuestGame(won, score, cluesRevealed, wrongGuesses, betRound, playerName, guesses = [], headshotUrl = "") {
     const stats = getGuestStats();
     const date = getGameDate();
     stats.history[date] = {
@@ -274,7 +274,8 @@ function saveLocalGuestGame(won, score, cluesRevealed, wrongGuesses, betRound, p
         wrong_guesses: wrongGuesses,
         bet_round: betRound,
         player_name: playerName,
-        guesses: guesses
+        guesses: guesses,
+        headshot_url: headshotUrl
     };
     localStorage.setItem("puck10_guest_stats", JSON.stringify(stats));
 }
@@ -670,7 +671,7 @@ async function endGame(won, playerName = "", headshotUrl = "") {
         updateGuessCardForCompleted(won, finalPlayerName);
 
         if (data.status === "guest_success") {
-            saveLocalGuestGame(won, gameState.finalScore, gameState.currentRound, gameState.wrongGuesses, gameState.betRound, finalPlayerName, gameState.guesses);
+            saveLocalGuestGame(won, gameState.finalScore, gameState.currentRound, gameState.wrongGuesses, gameState.betRound, finalPlayerName, gameState.guesses, headshotUrl || data.headshot_url);
             gameState.lifetimeStats = getGuestLifetimeStats();
         } else if (data.lifetime_stats) {
             gameState.lifetimeStats = data.lifetime_stats;
