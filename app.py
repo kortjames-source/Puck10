@@ -124,6 +124,49 @@ def init_db():
         conn.execute("ALTER TABLE user_stats ADD COLUMN guesses TEXT")
         conn.commit()
         
+    # Run database corrections for draft teams and teams_played
+    try:
+        corrections = [
+            ("Sebastian Aho", "Hartford Whalers", "Carolina Hurricanes"),
+            ("Matthew Tkachuk", "Atlanta Flames", "Calgary Flames"),
+            ("Adam Fox", "Atlanta Flames", "Calgary Flames"),
+            ("Nathan MacKinnon", "Quebec Nordiques", "Colorado Avalanche"),
+            ("Cale Makar", "Quebec Nordiques", "Colorado Avalanche"),
+            ("Jarome Iginla", "Minnesota North Stars", "Dallas Stars")
+        ]
+        
+        for name, old_team, new_team in corrections:
+            rows = conn.execute("SELECT date, draft_status FROM daily_players WHERE name = ?", (name,)).fetchall()
+            for r in rows:
+                date_val, ds = r['date'], r['draft_status']
+                if ds and old_team in ds:
+                    new_ds = ds.replace(old_team, new_team)
+                    conn.execute("UPDATE daily_players SET draft_status = ? WHERE name = ? AND date = ?", (new_ds, name, date_val))
+                    
+        for name, old_team, new_team in corrections:
+            rows = conn.execute("SELECT pid, draft_status FROM practice_players WHERE name = ?", (name,)).fetchall()
+            for r in rows:
+                pid_val, ds = r['pid'], r['draft_status']
+                if ds and old_team in ds:
+                    new_ds = ds.replace(old_team, new_team)
+                    conn.execute("UPDATE practice_players SET draft_status = ? WHERE name = ? AND pid = ?", (new_ds, name, pid_val))
+
+        aho_tp = json.dumps([{"name": "Carolina Hurricanes", "logo": "https://assets.nhle.com/logos/nhl/svg/CAR_light.svg"}])
+        conn.execute("UPDATE daily_players SET teams_played = ?, franchises_count = 1 WHERE name = 'Sebastian Aho' AND teams_played LIKE '%Hartford Whalers%'", (aho_tp,))
+        conn.execute("UPDATE practice_players SET teams_played = ?, franchises_count = 1 WHERE name = 'Sebastian Aho' AND teams_played LIKE '%Hartford Whalers%'", (aho_tp,))
+
+        mack_tp = json.dumps([{"name": "Colorado Avalanche", "logo": "https://assets.nhle.com/logos/nhl/svg/COL_light.svg"}])
+        conn.execute("UPDATE daily_players SET teams_played = ?, franchises_count = 1 WHERE name = 'Nathan MacKinnon' AND teams_played LIKE '%Quebec Nordiques%'", (mack_tp,))
+        conn.execute("UPDATE practice_players SET teams_played = ?, franchises_count = 1 WHERE name = 'Nathan MacKinnon' AND teams_played LIKE '%Quebec Nordiques%'", (mack_tp,))
+
+        makar_tp = json.dumps([{"name": "Colorado Avalanche", "logo": "https://assets.nhle.com/logos/nhl/svg/COL_light.svg"}])
+        conn.execute("UPDATE daily_players SET teams_played = ?, franchises_count = 1 WHERE name = 'Cale Makar' AND teams_played LIKE '%Quebec Nordiques%'", (makar_tp,))
+        conn.execute("UPDATE practice_players SET teams_played = ?, franchises_count = 1 WHERE name = 'Cale Makar' AND teams_played LIKE '%Quebec Nordiques%'", (makar_tp,))
+        
+        conn.commit()
+    except Exception as db_err:
+        print(f"Error executing database corrections: {db_err}")
+        
     conn.close()
 
 
