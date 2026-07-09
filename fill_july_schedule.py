@@ -349,6 +349,29 @@ def run():
                 p['hockeydb_url']
             )
         )
+        # Also write to practice_players to keep cache rich
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO practice_players
+            (pid, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url, last_updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """,
+            (
+                p['player_id'],
+                p['name'],
+                p['height'],
+                p['weight'],
+                p['nationality'],
+                p['shoots'],
+                p['position'],
+                p['draft_status'],
+                p['franchises_count'],
+                json.dumps(p['teams_played']),
+                json.dumps(p['milestones']),
+                json.dumps(p['awards']),
+                p['hockeydb_url']
+            )
+        )
         scheduled_count += 1
         
     conn.commit()

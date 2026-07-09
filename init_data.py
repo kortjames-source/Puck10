@@ -58,74 +58,8 @@ def run():
         print(f"Created default admin user (username: admin, password: {admin_pass})")
 
         
-    # Let's scrape and schedule players
-    from app import fetch_nhl_player, parse_nhl_player
-
-    # 1. Connor McDavid for today
-    today = date.today().strftime('%Y-%m-%d')
-    print(f"Fetching Connor McDavid for today ({today})...")
-    raw_mcdavid = fetch_nhl_player("Connor McDavid")
-    if raw_mcdavid:
-        parsed_mcdavid = parse_nhl_player(raw_mcdavid)
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO daily_players 
-            (date, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url, active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-            """,
-            (
-                today,
-                parsed_mcdavid['name'],
-                parsed_mcdavid['height'],
-                parsed_mcdavid['weight'],
-                parsed_mcdavid['nationality'],
-                parsed_mcdavid['shoots'],
-                parsed_mcdavid['position'],
-                parsed_mcdavid['draft_status'],
-                parsed_mcdavid['franchises_count'],
-                json.dumps(parsed_mcdavid['teams_played']),
-                json.dumps(parsed_mcdavid['milestones']),
-                json.dumps(parsed_mcdavid['awards']),
-                parsed_mcdavid['hockeydb_url']
-            )
-        )
-        print(f"Scheduled Connor McDavid for {today}")
-    else:
-        print("Error fetching McDavid from NHL API")
-
-    # 2. Wayne Gretzky for tomorrow
-    tomorrow = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
-    print(f"Fetching Wayne Gretzky for tomorrow ({tomorrow})...")
-    raw_gretzky = fetch_nhl_player("Wayne Gretzky")
-    if raw_gretzky:
-        parsed_gretzky = parse_nhl_player(raw_gretzky)
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO daily_players 
-            (date, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url, active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-            """,
-            (
-                tomorrow,
-                parsed_gretzky['name'],
-                parsed_gretzky['height'],
-                parsed_gretzky['weight'],
-                parsed_gretzky['nationality'],
-                parsed_gretzky['shoots'],
-                parsed_gretzky['position'],
-                parsed_gretzky['draft_status'],
-                parsed_gretzky['franchises_count'],
-                json.dumps(parsed_gretzky['teams_played']),
-                json.dumps(parsed_gretzky['milestones']),
-                json.dumps(parsed_gretzky['awards']),
-                parsed_gretzky['hockeydb_url']
-            )
-        )
-        print(f"Scheduled Wayne Gretzky for {tomorrow}")
-    else:
-        print("Error fetching Gretzky from NHL API")
-        
-    # Seed practice players
+    # Seed practice players first, so that we clear the table and seed the random pool
+    # before adding the specific daily players (McDavid and Gretzky) to the cache.
     print("Seeding practice players table with 15 random NHL players...")
     try:
         import random
@@ -176,6 +110,99 @@ def run():
         print(f"Successfully seeded {success_count} practice players.")
     except Exception as e:
         print(f"Error seeding practice players: {e}")
+
+    # Let's scrape and schedule daily players
+    from app import fetch_nhl_player, parse_nhl_player
+
+    def save_to_practice_cache(db_conn, parsed):
+        db_conn.execute(
+            """
+            INSERT OR REPLACE INTO practice_players
+            (pid, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url, last_updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """,
+            (
+                parsed['player_id'],
+                parsed['name'],
+                parsed['height'],
+                parsed['weight'],
+                parsed['nationality'],
+                parsed['shoots'],
+                parsed['position'],
+                parsed['draft_status'],
+                parsed['franchises_count'],
+                json.dumps(parsed['teams_played']),
+                json.dumps(parsed['milestones']),
+                json.dumps(parsed['awards']),
+                parsed['hockeydb_url']
+            )
+        )
+
+    # 1. Connor McDavid for today
+    today = date.today().strftime('%Y-%m-%d')
+    print(f"Fetching Connor McDavid for today ({today})...")
+    raw_mcdavid = fetch_nhl_player("Connor McDavid")
+    if raw_mcdavid:
+        parsed_mcdavid = parse_nhl_player(raw_mcdavid)
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO daily_players 
+            (date, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url, active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            """,
+            (
+                today,
+                parsed_mcdavid['name'],
+                parsed_mcdavid['height'],
+                parsed_mcdavid['weight'],
+                parsed_mcdavid['nationality'],
+                parsed_mcdavid['shoots'],
+                parsed_mcdavid['position'],
+                parsed_mcdavid['draft_status'],
+                parsed_mcdavid['franchises_count'],
+                json.dumps(parsed_mcdavid['teams_played']),
+                json.dumps(parsed_mcdavid['milestones']),
+                json.dumps(parsed_mcdavid['awards']),
+                parsed_mcdavid['hockeydb_url']
+            )
+        )
+        save_to_practice_cache(conn, parsed_mcdavid)
+        print(f"Scheduled Connor McDavid for {today}")
+    else:
+        print("Error fetching McDavid from NHL API")
+
+    # 2. Wayne Gretzky for tomorrow
+    tomorrow = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
+    print(f"Fetching Wayne Gretzky for tomorrow ({tomorrow})...")
+    raw_gretzky = fetch_nhl_player("Wayne Gretzky")
+    if raw_gretzky:
+        parsed_gretzky = parse_nhl_player(raw_gretzky)
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO daily_players 
+            (date, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url, active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            """,
+            (
+                tomorrow,
+                parsed_gretzky['name'],
+                parsed_gretzky['height'],
+                parsed_gretzky['weight'],
+                parsed_gretzky['nationality'],
+                parsed_gretzky['shoots'],
+                parsed_gretzky['position'],
+                parsed_gretzky['draft_status'],
+                parsed_gretzky['franchises_count'],
+                json.dumps(parsed_gretzky['teams_played']),
+                json.dumps(parsed_gretzky['milestones']),
+                json.dumps(parsed_gretzky['awards']),
+                parsed_gretzky['hockeydb_url']
+            )
+        )
+        save_to_practice_cache(conn, parsed_gretzky)
+        print(f"Scheduled Wayne Gretzky for {tomorrow}")
+    else:
+        print("Error fetching Gretzky from NHL API")
         
     conn.commit()
     conn.close()

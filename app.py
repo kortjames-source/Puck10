@@ -1984,7 +1984,29 @@ def get_random_player():
         
     if not player_details:
         print("Falling back to offline pool.")
-        p = random.choice(FALLBACK_PLAYERS)
+        # Filter fallback players to exclude any upcoming daily players (next 90 days)
+        today_dt = date.today()
+        future_limit = today_dt + timedelta(days=90)
+        today_str_sql = today_dt.strftime('%Y-%m-%d')
+        future_limit_str_sql = future_limit.strftime('%Y-%m-%d')
+        
+        try:
+            conn = get_db_connection()
+            scheduled_names_rows = conn.execute(
+                "SELECT name FROM daily_players WHERE date >= ? AND date <= ?",
+                (today_str_sql, future_limit_str_sql)
+            ).fetchall()
+            conn.close()
+            scheduled_names = {r['name'] for r in scheduled_names_rows}
+        except Exception as db_err:
+            print(f"Error fetching scheduled names for fallback exclusion: {db_err}")
+            scheduled_names = set()
+            
+        allowed_fallbacks = [p for p in FALLBACK_PLAYERS if p['name'] not in scheduled_names]
+        if allowed_fallbacks:
+            p = random.choice(allowed_fallbacks)
+        else:
+            p = random.choice(FALLBACK_PLAYERS)
         player_details = dict(p)
         
     session['practice_dates'][today_str] += 1
