@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initAdminTabs();
     initUserManagement();
     initErrorLogs();
+    initPracticeViewer();
 });
 
 // Helper: Show status messages
@@ -620,6 +621,8 @@ function initAdminTabs() {
                 loadAdminUsers();
             } else if (targetTab === "errors") {
                 loadAdminErrors();
+            } else if (targetTab === "practice") {
+                loadAdminPracticePlayers();
             }
         });
     });
@@ -1094,6 +1097,186 @@ async function clearAllErrorLogs() {
         showAdminStatus("Network error clearing exception logs.", "error");
     } finally {
         clearBtn.disabled = false;
+    }
+}
+
+// Practice Players Cache Viewer Logic
+let allPracticePlayersData = [];
+
+function initPracticeViewer() {
+    const searchBtn = document.getElementById("practice-search-btn");
+    const searchInput = document.getElementById("practice-search-input");
+    
+    if (searchBtn && searchInput) {
+        searchBtn.addEventListener("click", () => {
+            filterPracticePlayersTable(searchInput.value.trim());
+        });
+        searchInput.addEventListener("keyup", (e) => {
+            if (e.key === "Enter") {
+                filterPracticePlayersTable(searchInput.value.trim());
+            }
+        });
+    }
+}
+
+async function loadAdminPracticePlayers() {
+    const tbody = document.getElementById("admin-practice-tbody");
+    if (!tbody) return;
+    
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-secondary"><i class="fa-solid fa-spinner fa-spin"></i> Loading practice players...</td></tr>`;
+    
+    try {
+        const response = await fetch("/api/admin/practice-players");
+        const data = await response.json();
+        
+        if (data.error) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-accent">Error loading practice players: ${data.error}</td></tr>`;
+            return;
+        }
+        
+        allPracticePlayersData = data || [];
+        populatePracticePlayersTable(allPracticePlayersData);
+    } catch (err) {
+        console.error("Error loading practice players:", err);
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-accent">Network error loading practice players.</td></tr>`;
+    }
+}
+
+function populatePracticePlayersTable(players) {
+    const tbody = document.getElementById("admin-practice-tbody");
+    if (!tbody) return;
+    
+    if (players.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-secondary">No practice players cached.</td></tr>`;
+        return;
+    }
+    
+    let html = "";
+    players.forEach(p => {
+        const dbUrlSpan = p.hockeydb_url ? `<a href="${p.hockeydb_url}" target="_blank" class="text-secondary" style="font-size: 0.8rem; display: block; text-decoration: underline;"><i class="fa-solid fa-arrow-up-right-from-square"></i> HockeyDB</a>` : '';
+        html += `
+            <tr>
+                <td style="vertical-align: middle;">
+                    <div style="font-weight: 600; color: var(--primary);">${escapeHtml(p.name)}</div>
+                    ${dbUrlSpan}
+                </td>
+                <td style="vertical-align: middle;">${escapeHtml(p.position || 'N/A')}</td>
+                <td style="vertical-align: middle;">${escapeHtml(p.nationality || 'N/A')}</td>
+                <td style="vertical-align: middle;">${p.franchises_count || 0}</td>
+                <td style="vertical-align: middle; font-size: 0.85rem;" class="text-secondary">${p.last_updated || 'N/A'}</td>
+                <td style="vertical-align: middle;">
+                    <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary btn-xs use-practice-player-btn" data-pid="${p.pid}" type="button">
+                            <i class="fa-solid fa-calendar-plus"></i> Use in Schedule
+                        </button>
+                        <button class="btn btn-accent btn-xs delete-practice-player-btn" data-pid="${p.pid}" data-name="${escapeHtml(p.name)}" type="button">
+                            <i class="fa-solid fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+    
+    // Attach event listeners to new buttons
+    tbody.querySelectorAll(".use-practice-player-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const pid = btn.dataset.pid;
+            const player = allPracticePlayersData.find(p => p.pid === pid);
+            if (player) {
+                usePracticePlayerInSchedule(player);
+            }
+        });
+    });
+    
+    tbody.querySelectorAll(".delete-practice-player-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const pid = btn.dataset.pid;
+            const name = btn.dataset.name;
+            deletePracticePlayer(pid, name);
+        });
+    });
+}
+
+function filterPracticePlayersTable(query) {
+    if (!query) {
+        populatePracticePlayersTable(allPracticePlayersData);
+        return;
+    }
+    const lowerQuery = query.toLowerCase();
+    const filtered = allPracticePlayersData.filter(p => 
+        (p.name && p.name.toLowerCase().includes(lowerQuery)) ||
+        (p.position && p.position.toLowerCase().includes(lowerQuery)) ||
+        (p.nationality && p.nationality.toLowerCase().includes(lowerQuery))
+    );
+    populatePracticePlayersTable(filtered);
+}
+
+function usePracticePlayerInSchedule(player) {
+    const editorSection = document.getElementById("player-editor-section");
+    if (!editorSection) return;
+    
+    // Populate form fields
+    document.getElementById("editor-player-name").value = player.name || "";
+    document.getElementById("editor-height").value = player.height || "";
+    document.getElementById("editor-weight").value = player.weight || "";
+    document.getElementById("editor-nationality").value = player.nationality || "";
+    document.getElementById("editor-shoots").value = player.shoots || "";
+    document.getElementById("editor-position").value = player.position || "";
+    document.getElementById("editor-draft").value = player.draft_status || "";
+    document.getElementById("editor-franchises").value = player.franchises_count || "0";
+    document.getElementById("editor-url").value = player.hockeydb_url || "";
+    
+    // Populate list editors
+    populateTeamsList(player.teams_played || []);
+    populateMilestonesList(player.milestones || []);
+    populateAwardsList(player.awards || []);
+    
+    // Switch tab back to lineup
+    const lineupTabBtn = document.querySelector('.admin-tab-btn[data-tab="lineup"]');
+    if (lineupTabBtn) {
+        lineupTabBtn.click();
+    }
+    
+    // Show editor panel and scroll to it
+    editorSection.style.display = "block";
+    editorSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    
+    showAdminStatus(`Loaded practice player "${player.name}". Choose a date and save to schedule him.`, "success", false);
+}
+
+async function deletePracticePlayer(pid, name) {
+    if (!confirm(`Are you sure you want to delete "${name}" from the practice cache?`)) return;
+    
+    try {
+        const response = await fetch("/api/admin/practice-players/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pid })
+        });
+        const data = await response.json();
+        
+        if (data.error) {
+            showAdminStatus("Failed to delete practice player: " + data.error, "error");
+        } else {
+            showAdminStatus(`Successfully deleted "${name}" from practice cache.`, "success");
+            loadAdminPracticePlayers();
+            // Refresh stats counts at the bottom of Lineup tab if it exists
+            const cacheCountEl = document.getElementById("practice-cache-count");
+            if (cacheCountEl) {
+                // Trigger a quick fetch of practice cache status
+                const res = await fetch("/api/admin/practice-cache");
+                const cacheData = await res.json();
+                if (!cacheData.error) {
+                    cacheCountEl.innerText = `${cacheData.count} players`;
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Error deleting practice player:", err);
+        showAdminStatus("Network error deleting practice player.", "error");
     }
 }
 

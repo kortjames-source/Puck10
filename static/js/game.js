@@ -572,6 +572,7 @@ async function submitGuess() {
 
         if (data.correct) {
             gameState.guesses.push(data.player_name);
+            gameState.won = true;
             renderGuesses();
             endGame(true, data.player_name, data.headshot_url);
         } else {

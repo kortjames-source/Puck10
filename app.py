@@ -1338,11 +1338,11 @@ custom_abbrev_map = {
     'CGY': 'Calgary Flames', 'CBJ': 'Columbus Blue Jackets', 'LAK': 'Los Angeles Kings',
     'ARI': 'Arizona Coyotes', 'VGK': 'Vegas Golden Knights', 'SEA': 'Seattle Kraken',
     'UTA': 'Utah Hockey Club', 'ATL': 'Atlanta Thrashers', 'QUE': 'Quebec Nordiques',
-    'HFD': 'Hartford Whalers', 'MNS': 'Minnesota North Stars', 'WIN': 'Winnipeg Jets (1979-1996)'
+    'HFD': 'Hartford Whalers', 'MNS': 'Minnesota North Stars', 'WIN': 'Winnipeg Jets (1979-1996)',
+    'CAR': 'Carolina Hurricanes'
 }
 for k, v in custom_abbrev_map.items():
-    if k not in ABBREVIATION_TO_TEAM:
-        ABBREVIATION_TO_TEAM[k] = v
+    ABBREVIATION_TO_TEAM[k] = v
 
 def fetch_nhl_player(name_or_id):
     if not name_or_id:
@@ -1520,6 +1520,68 @@ FAMOUS_PLAYER_NAMES = [
     "Sergei Fedorov"
 ]
 
+@app.route('/api/admin/practice-players', methods=['GET'])
+def admin_get_practice_players():
+    if session.get('username') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    conn = get_db_connection()
+    players = conn.execute("SELECT * FROM practice_players ORDER BY name ASC").fetchall()
+    conn.close()
+    
+    result = []
+    for p in players:
+        try:
+            teams_played = json.loads(p['teams_played']) if p['teams_played'] else []
+        except Exception:
+            teams_played = []
+            
+        try:
+            milestones = json.loads(p['milestones']) if p['milestones'] else []
+        except Exception:
+            milestones = []
+            
+        try:
+            awards = json.loads(p['awards']) if p['awards'] else []
+        except Exception:
+            awards = []
+            
+        result.append({
+            "pid": p['pid'],
+            "name": p['name'],
+            "height": p['height'],
+            "weight": p['weight'],
+            "nationality": p['nationality'],
+            "shoots": p['shoots'],
+            "position": p['position'],
+            "draft_status": p['draft_status'],
+            "franchises_count": p['franchises_count'],
+            "teams_played": teams_played,
+            "milestones": milestones,
+            "awards": awards,
+            "hockeydb_url": p['hockeydb_url'],
+            "last_updated": p['last_updated']
+        })
+        
+    return jsonify(result)
+
+@app.route('/api/admin/practice-players/delete', methods=['POST'])
+def admin_delete_practice_player():
+    if session.get('username') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    data = request.json
+    pid = data.get('pid')
+    if not pid:
+        return jsonify({"error": "Missing pid parameter"}), 400
+        
+    conn = get_db_connection()
+    conn.execute("DELETE FROM practice_players WHERE pid = ?", (pid,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"status": "success"})
+
 @app.route('/api/admin/practice-cache', methods=['GET', 'POST'])
 def admin_practice_cache():
     if session.get('username') != 'admin':
@@ -1588,7 +1650,8 @@ def admin_practice_cache():
         except Exception as outer_err:
             print(f"Fatal error in background cache thread: {outer_err}")
 
-    threading.Thread(target=rebuild_cache_task, daemon=True).start()
+    if not app.config.get('TESTING'):
+        threading.Thread(target=rebuild_cache_task, daemon=True).start()
     return jsonify({"status": "started", "message": "Background cache refresh started."})
 
 @app.route('/api/admin/fill-schedule', methods=['POST'])

@@ -78,11 +78,11 @@ custom_abbrev_map = {
     'QUE': 'Quebec Nordiques',
     'HFD': 'Hartford Whalers',
     'MNS': 'Minnesota North Stars',
-    'WIN': 'Winnipeg Jets (1979-1996)'
+    'WIN': 'Winnipeg Jets (1979-1996)',
+    'CAR': 'Carolina Hurricanes'
 }
 for k, v in custom_abbrev_map.items():
-    if k not in ABBREVIATION_TO_TEAM:
-        ABBREVIATION_TO_TEAM[k] = v
+    ABBREVIATION_TO_TEAM[k] = v
 
 def fetch_nhl_player(name):
     encoded = urllib.parse.quote(name)

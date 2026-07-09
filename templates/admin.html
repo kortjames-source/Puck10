@@ -21,6 +21,9 @@
     <button class="admin-tab-btn" data-tab="errors">
         <i class="fa-solid fa-bug"></i> System Error Logs
     </button>
+    <button class="admin-tab-btn" data-tab="practice">
+        <i class="fa-solid fa-graduation-cap"></i> Practice Cache
+    </button>
 </div>
 
 <!-- Tab 1: Lineup & Schedule -->
@@ -457,6 +460,36 @@
             <button type="button" id="close-error-details-btn" class="btn btn-secondary">
                 Close Details
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- Tab 4: Practice Players Cache -->
+<div id="tab-practice" class="admin-tab-content">
+    <div class="card">
+        <h3 class="card-title">Practice Cache Players</h3>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; max-width: 400px;">
+            <input type="text" id="practice-search-input" class="form-control" placeholder="Search practice player by name...">
+            <button id="practice-search-btn" class="btn btn-secondary" type="button">
+                <i class="fa-solid fa-magnifying-glass"></i> Search
+            </button>
+        </div>
+        <div class="schedule-table-wrapper" style="max-height: 500px; overflow-y: auto;">
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th>Player Details</th>
+                        <th>Position</th>
+                        <th>Nationality</th>
+                        <th>Franchises</th>
+                        <th>Last Updated</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-practice-tbody">
+                    <!-- Populated dynamically by JS -->
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

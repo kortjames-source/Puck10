@@ -17,6 +17,15 @@ class Puck10PremiumTestCase(unittest.TestCase):
         conn.execute("DELETE FROM user_stats WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user', 'standard_test_user', 'vip_test_user'))")
         conn.execute("DELETE FROM password_resets WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user', 'standard_test_user', 'vip_test_user'))")
         conn.execute("DELETE FROM error_logs WHERE request_path = '/api/trigger-test-error'")
+        
+        # Setup mock practice players to avoid test flakiness/race conditions from background threads
+        conn.execute("DELETE FROM practice_players WHERE pid LIKE 'test_pid_%'")
+        for i in range(1, 6):
+            conn.execute("""
+                INSERT INTO practice_players (pid, name, height, weight, nationality, shoots, position, draft_status, franchises_count, teams_played, milestones, awards, hockeydb_url)
+                VALUES (?, ?, '6-1', '200 lbs', 'Canada', 'L', 'Center', 'Drafted', 3, '[]', '[]', '[]', '')
+            """, (f"test_pid_{i}", f"Test Player {i}"))
+            
         conn.commit()
         conn.close()
 
@@ -27,6 +36,7 @@ class Puck10PremiumTestCase(unittest.TestCase):
         conn.execute("DELETE FROM user_stats WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user', 'standard_test_user', 'vip_test_user'))")
         conn.execute("DELETE FROM password_resets WHERE user_id IN (SELECT id FROM users WHERE username IN ('test_premium_user', 'recovery_test_user', 'standard_test_user', 'vip_test_user'))")
         conn.execute("DELETE FROM error_logs WHERE request_path = '/api/trigger-test-error'")
+        conn.execute("DELETE FROM practice_players WHERE pid LIKE 'test_pid_%'")
         conn.commit()
         conn.close()
 
@@ -200,6 +210,28 @@ class Puck10PremiumTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
         self.assertEqual(data.get("status"), "started")
+
+        # 5. Verify GET /api/admin/practice-players returns the list of cached players
+        response = self.client.get('/api/admin/practice-players')
+        self.assertEqual(response.status_code, 200)
+        players = json.loads(response.data)
+        self.assertIsInstance(players, list)
+        self.assertGreaterEqual(len(players), 5)
+        
+        # Capture first player's pid
+        test_pid = players[0]['pid']
+        test_name = players[0]['name']
+
+        # 6. Verify POST /api/admin/practice-players/delete removes the player from cache
+        response = self.client.post('/api/admin/practice-players/delete', data=json.dumps({"pid": test_pid}), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify the count decreased or player is gone
+        response = self.client.get('/api/admin/practice-players')
+        players_after = json.loads(response.data)
+        self.assertEqual(len(players_after), len(players) - 1)
+        self.assertFalse(any(p['pid'] == test_pid for p in players_after))
+
 
     def test_password_update_flow(self):
         # 1. Register a new user
