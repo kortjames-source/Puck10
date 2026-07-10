@@ -400,6 +400,21 @@ a:hover {
     color: var(--text-secondary);
 }
 
+.bet-clue {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 0.25rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: color var(--transition-fast);
+}
+
+.bet-card:hover .bet-clue,
+.bet-card.selected .bet-clue {
+    color: var(--primary);
+}
+
 /* Clues Section */
 .clues-list {
     display: flex;

@@ -36,42 +36,52 @@
             <div class="bet-grid">
                 <div class="bet-card selected" data-round="10">
                     <div class="bet-round-num">10</div>
+                    <div class="bet-clue">Awards</div>
                     <div class="bet-payout">+10 / -20</div>
                 </div>
                 <div class="bet-card" data-round="9">
                     <div class="bet-round-num">9</div>
+                    <div class="bet-clue">Milestones</div>
                     <div class="bet-payout">+20 / -40</div>
                 </div>
                 <div class="bet-card" data-round="8">
                     <div class="bet-round-num">8</div>
+                    <div class="bet-clue">Teams Played</div>
                     <div class="bet-payout">+30 / -60</div>
                 </div>
                 <div class="bet-card" data-round="7">
                     <div class="bet-round-num">7</div>
+                    <div class="bet-clue">Franchises</div>
                     <div class="bet-payout">+40 / -80</div>
                 </div>
                 <div class="bet-card" data-round="6">
                     <div class="bet-round-num">6</div>
+                    <div class="bet-clue">Draft Status</div>
                     <div class="bet-payout">+50 / -100</div>
                 </div>
                 <div class="bet-card" data-round="5">
                     <div class="bet-round-num">5</div>
+                    <div class="bet-clue">Position</div>
                     <div class="bet-payout">+60 / -120</div>
                 </div>
                 <div class="bet-card" data-round="4">
                     <div class="bet-round-num">4</div>
+                    <div class="bet-clue">Shoots</div>
                     <div class="bet-payout">+70 / -140</div>
                 </div>
                 <div class="bet-card" data-round="3">
                     <div class="bet-round-num">3</div>
+                    <div class="bet-clue">Birth Country</div>
                     <div class="bet-payout">+80 / -160</div>
                 </div>
                 <div class="bet-card" data-round="2">
                     <div class="bet-round-num">2</div>
+                    <div class="bet-clue">Weight</div>
                     <div class="bet-payout">+90 / -180</div>
                 </div>
                 <div class="bet-card" data-round="1">
                     <div class="bet-round-num">1</div>
+                    <div class="bet-clue">Height</div>
                     <div class="bet-payout">+100 / -200</div>
                 </div>
             </div>
@@ -202,13 +212,20 @@
         <button class="modal-close" onclick="document.getElementById('results-modal-overlay').style.display='none'">&times;</button>
         <h2 id="result-title" class="result-title win">SUCCESS!</h2>
         <p class="text-secondary">Mystery player was:</p>
-        <h3 id="correct-player-name" style="font-size: 1.8rem; color: var(--text-primary); margin: 0.5rem 0;">Connor McDavid</h3>
+        <a id="correct-player-link" href="" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block; transition: opacity 0.2s ease;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+            <h3 id="correct-player-name" style="font-size: 1.8rem; color: var(--text-primary); margin: 0.5rem 0;">Connor McDavid</h3>
+        </a>
         
         <!-- Player Photo -->
-        <div id="player-photo-container" style="display: none; justify-content: center; margin: 1rem 0;">
-            <div style="position: relative; padding: 3px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); width: 130px; height: 130px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+        <a id="player-photo-container" href="" target="_blank" rel="noopener noreferrer" style="display: none; justify-content: center; margin: 1rem 0; text-decoration: none;">
+            <div style="position: relative; padding: 3px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); width: 130px; height: 130px; display: flex; align-items: center; justify-content: center; overflow: hidden; transition: transform 0.2s ease, box-shadow 0.2s ease;" onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 12px 30px rgba(0,0,0,0.7)'" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 8px 24px rgba(0,0,0,0.5)'">
                 <img id="player-photo" src="" alt="Player Photo" style="width: 100%; height: 100%; border-radius: 6px; object-fit: contain; background-color: rgba(15, 23, 42, 0.6);">
             </div>
+        </a>
+
+        <!-- Profile Link Tip -->
+        <div id="profile-link-tip" style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem; display: none; align-items: center; justify-content: center; gap: 0.25rem;">
+            <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.7rem;"></i> Click name or photo to view stats
         </div>
         
         <div id="result-score" class="result-score">210 pts</div>

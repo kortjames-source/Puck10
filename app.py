@@ -832,7 +832,8 @@ def get_daily_player():
                 "won": stats['won'],
                 "player_name": player['name'],
                 "headshot_url": get_player_headshot_url(player['name']),
-                "guesses": guesses_list
+                "guesses": guesses_list,
+                "hockeydb_url": player['hockeydb_url']
             }
             
     conn.close()
@@ -898,7 +899,7 @@ def make_guess():
         
     conn = get_db_connection()
     player = conn.execute(
-        "SELECT name FROM daily_players WHERE date = ? AND active = 1", (target_date,)
+        "SELECT name, hockeydb_url FROM daily_players WHERE date = ? AND active = 1", (target_date,)
     ).fetchone()
     conn.close()
     
@@ -913,7 +914,8 @@ def make_guess():
         return jsonify({
             "correct": True, 
             "player_name": player['name'],
-            "headshot_url": get_player_headshot_url(player['name'])
+            "headshot_url": get_player_headshot_url(player['name']),
+            "hockeydb_url": player['hockeydb_url']
         })
         
     # Extra check: check if it matches without accents or special characters if needed, 
@@ -935,13 +937,14 @@ def submit_game():
         # For guest play, return success but don't write to DB
         conn = get_db_connection()
         player = conn.execute(
-            "SELECT name FROM daily_players WHERE date = ? AND active = 1", (target_date,)
+            "SELECT name, hockeydb_url FROM daily_players WHERE date = ? AND active = 1", (target_date,)
         ).fetchone()
         conn.close()
         return jsonify({
             "status": "guest_success", 
             "player_name": player['name'] if player else "Unknown",
-            "headshot_url": get_player_headshot_url(player['name']) if player else None
+            "headshot_url": get_player_headshot_url(player['name']) if player else None,
+            "hockeydb_url": player['hockeydb_url'] if player else None
         })
         
     user_id = session['user_id']
@@ -956,7 +959,7 @@ def submit_game():
     
     # Get player name
     player = conn.execute(
-        "SELECT name FROM daily_players WHERE date = ? AND active = 1", (target_date,)
+        "SELECT name, hockeydb_url FROM daily_players WHERE date = ? AND active = 1", (target_date,)
     ).fetchone()
     
     if not player:
@@ -987,7 +990,8 @@ def submit_game():
             "status": "success", 
             "player_name": player['name'],
             "lifetime_stats": lifetime_stats,
-            "headshot_url": get_player_headshot_url(player['name'])
+            "headshot_url": get_player_headshot_url(player['name']),
+            "hockeydb_url": player['hockeydb_url']
         })
     except Exception as e:
         conn.close()
@@ -1856,7 +1860,8 @@ FALLBACK_PLAYERS = [
         "franchises_count": 1,
         "teams_played": [{"name": "Edmonton Oilers", "logo": "https://assets.nhle.com/logos/nhl/svg/EDM_light.svg"}],
         "milestones": ["647 NHL Games Played", "335 NHL Goals", "647 NHL Assists", "982 NHL Points"],
-        "awards": ["2016-17 - Art Ross Trophy", "2016-17 - Hart Memorial Trophy", "2022-23 - Maurice Richard Trophy"]
+        "awards": ["2016-17 - Art Ross Trophy", "2016-17 - Hart Memorial Trophy", "2022-23 - Maurice Richard Trophy"],
+        "hockeydb_url": "https://www.nhl.com/player/connor-mcdavid-8478402-8478402"
     },
     {
         "name": "Sidney Crosby",
@@ -1869,7 +1874,8 @@ FALLBACK_PLAYERS = [
         "franchises_count": 1,
         "teams_played": [{"name": "Pittsburgh Penguins", "logo": "https://assets.nhle.com/logos/nhl/svg/PIT_light.svg"}],
         "milestones": ["1272 NHL Games Played", "592 NHL Goals", "1004 NHL Assists", "1596 NHL Points"],
-        "awards": ["2006-07 - Art Ross Trophy", "2007-08 - Hart Memorial Trophy", "2008-09 - Stanley Cup Champion"]
+        "awards": ["2006-07 - Art Ross Trophy", "2007-08 - Hart Memorial Trophy", "2008-09 - Stanley Cup Champion"],
+        "hockeydb_url": "https://www.nhl.com/player/sidney-crosby-8471675-8471675"
     },
     {
         "name": "Alexander Ovechkin",
@@ -1882,7 +1888,8 @@ FALLBACK_PLAYERS = [
         "franchises_count": 1,
         "teams_played": [{"name": "Washington Capitals", "logo": "https://assets.nhle.com/logos/nhl/svg/WSH_light.svg"}],
         "milestones": ["1426 NHL Games Played", "853 NHL Goals", "697 NHL Assists", "1550 NHL Points"],
-        "awards": ["2007-08 - Art Ross Trophy", "2007-08 - Hart Memorial Trophy", "2017-18 - Stanley Cup Champion"]
+        "awards": ["2007-08 - Art Ross Trophy", "2007-08 - Hart Memorial Trophy", "2017-18 - Stanley Cup Champion"],
+        "hockeydb_url": "https://www.nhl.com/player/alexander-ovechkin-8471214-8471214"
     },
     {
         "name": "Wayne Gretzky",
@@ -1900,7 +1907,8 @@ FALLBACK_PLAYERS = [
             {"name": "New York Rangers", "logo": "https://assets.nhle.com/logos/nhl/svg/NYR_light.svg"}
         ],
         "milestones": ["1487 NHL Games Played", "894 NHL Goals", "1963 NHL Assists", "2857 NHL Points"],
-        "awards": ["1979-80 - Hart Memorial Trophy", "1980-81 - Art Ross Trophy", "1983-84 - Stanley Cup Champion"]
+        "awards": ["1979-80 - Hart Memorial Trophy", "1980-81 - Art Ross Trophy", "1983-84 - Stanley Cup Champion"],
+        "hockeydb_url": "https://www.nhl.com/player/wayne-gretzky-8447400-8447400"
     },
     {
         "name": "Auston Matthews",
@@ -1913,7 +1921,8 @@ FALLBACK_PLAYERS = [
         "franchises_count": 1,
         "teams_played": [{"name": "Toronto Maple Leafs", "logo": "https://assets.nhle.com/logos/nhl/svg/TOR_light.svg"}],
         "milestones": ["562 NHL Games Played", "368 NHL Goals", "281 NHL Assists", "649 NHL Points"],
-        "awards": ["2016-17 - Calder Memorial Trophy", "2021-22 - Hart Memorial Trophy", "2023-24 - Maurice Richard Trophy"]
+        "awards": ["2016-17 - Calder Memorial Trophy", "2021-22 - Hart Memorial Trophy", "2023-24 - Maurice Richard Trophy"],
+        "hockeydb_url": "https://www.nhl.com/player/auston-matthews-8479318-8479318"
     }
 ]
 
@@ -1977,7 +1986,8 @@ def get_random_player():
                 "franchises_count": row["franchises_count"],
                 "teams_played": json.loads(row["teams_played"] or "[]"),
                 "milestones": json.loads(row["milestones"] or "[]"),
-                "awards": json.loads(row["awards"] or "[]")
+                "awards": json.loads(row["awards"] or "[]"),
+                "hockeydb_url": row["hockeydb_url"]
             }
     except Exception as e:
         print(f"Database error loading practice player: {e}")
@@ -2013,6 +2023,7 @@ def get_random_player():
     session.modified = True
     
     session['random_player_answer'] = player_details['name']
+    session['random_player_url'] = player_details.get('hockeydb_url', '')
     
     clues = [
         scraper.format_height(player_details['height']),
@@ -2048,10 +2059,12 @@ def make_guess_random():
     user_guess = guess.lower().strip()
     if correct_name.lower().strip() == user_guess:
         session.pop('random_player_answer', None)
+        url = session.pop('random_player_url', None)
         return jsonify({
             "correct": True, 
             "player_name": correct_name,
-            "headshot_url": get_player_headshot_url(correct_name)
+            "headshot_url": get_player_headshot_url(correct_name),
+            "hockeydb_url": url
         })
         
     return jsonify({"correct": False})
@@ -2059,12 +2072,14 @@ def make_guess_random():
 @app.route('/api/reveal-random', methods=['POST'])
 def reveal_random():
     correct_name = session.pop('random_player_answer', None)
+    url = session.pop('random_player_url', None)
     if not correct_name:
         return jsonify({"error": "No active practice game"}), 400
         
     return jsonify({
         "player_name": correct_name,
-        "headshot_url": get_player_headshot_url(correct_name)
+        "headshot_url": get_player_headshot_url(correct_name),
+        "hockeydb_url": url
     })
 
 if __name__ == '__main__':

@@ -264,7 +264,7 @@ function getGuestLifetimeStats() {
     };
 }
 
-function saveLocalGuestGame(won, score, cluesRevealed, wrongGuesses, betRound, playerName, guesses = [], headshotUrl = "") {
+function saveLocalGuestGame(won, score, cluesRevealed, wrongGuesses, betRound, playerName, guesses = [], headshotUrl = "", hockeydbUrl = "") {
     const stats = getGuestStats();
     const date = getGameDate();
     stats.history[date] = {
@@ -275,7 +275,8 @@ function saveLocalGuestGame(won, score, cluesRevealed, wrongGuesses, betRound, p
         bet_round: betRound,
         player_name: playerName,
         guesses: guesses,
-        headshot_url: headshotUrl
+        headshot_url: headshotUrl,
+        hockeydb_url: hockeydbUrl
     };
     localStorage.setItem("puck10_guest_stats", JSON.stringify(stats));
 }
@@ -355,7 +356,7 @@ function showAlreadyPlayed(playedData) {
     updateGuessCardForCompleted(gameState.won, playedData.player_name);
 
     // Show modal results
-    showResultsModal(playedData.player_name, playedData.headshot_url);
+    showResultsModal(playedData.player_name, playedData.headshot_url, playedData.hockeydb_url);
 }
 
 function renderGuesses() {
@@ -575,7 +576,7 @@ async function submitGuess() {
             gameState.guesses.push(data.player_name);
             gameState.won = true;
             renderGuesses();
-            endGame(true, data.player_name, data.headshot_url);
+            endGame(true, data.player_name, data.headshot_url, data.hockeydb_url);
         } else {
             // Incorrect guess
             gameState.wrongGuesses++;
@@ -612,7 +613,7 @@ function showToast(message, type = "info") {
     }, 2500);
 }
 
-async function endGame(won, playerName = "", headshotUrl = "") {
+async function endGame(won, playerName = "", headshotUrl = "", hockeydbUrl = "") {
     gameState.active = false;
     gameState.completed = true;
     gameState.won = won;
@@ -661,6 +662,7 @@ async function endGame(won, playerName = "", headshotUrl = "") {
         
         // Show actual player name from submit API if not passed
         const finalPlayerName = playerName || data.player_name;
+        const finalHockeydbUrl = hockeydbUrl || data.hockeydb_url;
 
         // Reveal all 10 clues
         for (let i = 1; i <= 10; i++) {
@@ -671,14 +673,14 @@ async function endGame(won, playerName = "", headshotUrl = "") {
         updateGuessCardForCompleted(won, finalPlayerName);
 
         if (data.status === "guest_success") {
-            saveLocalGuestGame(won, gameState.finalScore, gameState.currentRound, gameState.wrongGuesses, gameState.betRound, finalPlayerName, gameState.guesses, headshotUrl || data.headshot_url);
+            saveLocalGuestGame(won, gameState.finalScore, gameState.currentRound, gameState.wrongGuesses, gameState.betRound, finalPlayerName, gameState.guesses, headshotUrl || data.headshot_url, finalHockeydbUrl);
             gameState.lifetimeStats = getGuestLifetimeStats();
         } else if (data.lifetime_stats) {
             gameState.lifetimeStats = data.lifetime_stats;
         }
 
         // Show modal
-        showResultsModal(finalPlayerName, headshotUrl || data.headshot_url);
+        showResultsModal(finalPlayerName, headshotUrl || data.headshot_url, finalHockeydbUrl);
 
         // Confetti!
         if (won && typeof confetti === "function") {
@@ -693,7 +695,7 @@ async function endGame(won, playerName = "", headshotUrl = "") {
     }
 }
 
-function showResultsModal(playerName, headshotUrl = "") {
+function showResultsModal(playerName, headshotUrl = "", hockeydbUrl = "") {
     if (resultTitle) {
         if (gameState.won) {
             resultTitle.innerText = "SUCCESS!";
@@ -707,17 +709,32 @@ function showResultsModal(playerName, headshotUrl = "") {
     if (resultScore) resultScore.innerText = `${gameState.finalScore} pts`;
     if (correctPlayerName) correctPlayerName.innerText = playerName;
 
-    // Display player photo if available
+    // Setup HockeyDB profile links
+    const playerLink = document.getElementById("correct-player-link");
     const photoContainer = document.getElementById("player-photo-container");
     const playerPhoto = document.getElementById("player-photo");
+    const profileLinkTip = document.getElementById("profile-link-tip");
+
+    const finalUrl = hockeydbUrl || `https://www.hockeydb.com/ihdb/stats/find_player.php?full_name=${encodeURIComponent(playerName)}`;
+
+    if (playerLink) {
+        playerLink.href = finalUrl;
+    }
+
     if (photoContainer && playerPhoto) {
         if (headshotUrl) {
             playerPhoto.src = headshotUrl;
             photoContainer.style.display = "flex";
+            photoContainer.href = finalUrl;
         } else {
             photoContainer.style.display = "none";
             playerPhoto.src = "";
+            photoContainer.href = "";
         }
+    }
+
+    if (profileLinkTip) {
+        profileLinkTip.style.display = "flex";
     }
 
     // Modal Stats
