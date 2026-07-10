@@ -88,5 +88,14 @@ CREATE TABLE IF NOT EXISTS premium_history (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-
-
+CREATE TABLE IF NOT EXISTS game_plays (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,          -- YYYY-MM-DD of the daily player
+    user_id INTEGER,             -- NULL for guests, or users.id
+    won INTEGER NOT NULL,        -- 1 for win, 0 for loss
+    score INTEGER NOT NULL,
+    clues_revealed INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, date)        -- Allows multiple NULLs (guests), but only one entry per user per day
+);

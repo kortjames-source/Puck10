@@ -24,6 +24,9 @@
     <button class="admin-tab-btn" data-tab="practice">
         <i class="fa-solid fa-graduation-cap"></i> Practice Cache
     </button>
+    <button class="admin-tab-btn" data-tab="stats">
+        <i class="fa-solid fa-chart-line"></i> Game Stats
+    </button>
 </div>
 
 <!-- Tab 1: Lineup & Schedule -->
@@ -488,6 +491,72 @@
                 </thead>
                 <tbody id="admin-practice-tbody">
                     <!-- Populated dynamically by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Tab 5: Game Stats -->
+<div id="tab-stats" class="admin-tab-content">
+    <!-- Summary Cards -->
+    <div class="profile-stats-dashboard" style="margin-bottom: 2rem;">
+        <div class="dashboard-stat-card">
+            <div class="dashboard-stat-val" id="stats-total-plays">-</div>
+            <div class="dashboard-stat-lbl">Total Games Played</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;" id="stats-play-breakdown">
+                - registered / - guests
+            </div>
+        </div>
+        <div class="dashboard-stat-card">
+            <div class="dashboard-stat-val" id="stats-success-rate" style="color: var(--success);">-</div>
+            <div class="dashboard-stat-lbl">Success Rate</div>
+            <div class="progress-bar-container" style="background: rgba(255,255,255,0.05); height: 6px; border-radius: 3px; margin-top: 0.75rem; overflow: hidden;">
+                <div id="stats-success-bar" style="background: var(--success); height: 100%; width: 0%; transition: width 0.5s ease;"></div>
+            </div>
+        </div>
+        <div class="dashboard-stat-card">
+            <div class="dashboard-stat-val" id="stats-failure-rate" style="color: var(--accent);">-</div>
+            <div class="dashboard-stat-lbl">Failure Rate</div>
+            <div class="progress-bar-container" style="background: rgba(255,255,255,0.05); height: 6px; border-radius: 3px; margin-top: 0.75rem; overflow: hidden;">
+                <div id="stats-failure-bar" style="background: var(--accent); height: 100%; width: 0%; transition: width 0.5s ease;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="profile-stats-dashboard" style="margin-bottom: 2rem; grid-template-columns: repeat(2, 1fr);">
+        <div class="dashboard-stat-card">
+            <div class="dashboard-stat-val" id="stats-avg-clues" style="color: var(--primary);">-</div>
+            <div class="dashboard-stat-lbl">Avg Clues Needed</div>
+        </div>
+        <div class="dashboard-stat-card">
+            <div class="dashboard-stat-val" id="stats-avg-score" style="color: var(--secondary);">-</div>
+            <div class="dashboard-stat-lbl">Avg Score</div>
+        </div>
+    </div>
+
+    <!-- Daily Stats Breakdown Table -->
+    <div class="card">
+        <h3 class="card-title">Daily Statistics Breakdown</h3>
+        <div class="schedule-table-wrapper" style="max-height: 550px; overflow-y: auto;">
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Target Player</th>
+                        <th>Total Plays</th>
+                        <th>Success Rate</th>
+                        <th>Failure Rate</th>
+                        <th>Avg Clues</th>
+                        <th>Win / Loss</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-stats-tbody">
+                    <tr>
+                        <td colspan="7" class="text-center text-secondary">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Loading statistics...
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>

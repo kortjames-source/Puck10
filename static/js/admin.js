@@ -623,6 +623,8 @@ function initAdminTabs() {
                 loadAdminErrors();
             } else if (targetTab === "practice") {
                 loadAdminPracticePlayers();
+            } else if (targetTab === "stats") {
+                loadAdminStats();
             }
         });
     });
@@ -1280,4 +1282,102 @@ async function deletePracticePlayer(pid, name) {
     }
 }
 
+// 6. Game Statistics Dashboard
+async function loadAdminStats() {
+    const tbody = document.getElementById("admin-stats-tbody");
+    if (!tbody) return;
+    
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-secondary"><i class="fa-solid fa-spinner fa-spin"></i> Loading statistics...</td></tr>`;
+    
+    try {
+        const response = await fetch("/api/admin/stats");
+        const data = await response.json();
+        
+        if (data.error) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-accent">Error loading statistics: ${data.error}</td></tr>`;
+            return;
+        }
+        
+        populateStatsDashboard(data);
+    } catch (err) {
+        console.error("Error loading statistics:", err);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-accent">Network error loading statistics.</td></tr>`;
+    }
+}
 
+function populateStatsDashboard(data) {
+    const overall = data.overall || {};
+    const daily = data.daily || [];
+    
+    // Populate summary cards
+    document.getElementById("stats-total-plays").innerText = overall.total_plays !== undefined ? overall.total_plays : 0;
+    document.getElementById("stats-play-breakdown").innerText = `${overall.registered_plays || 0} registered / ${overall.guest_plays || 0} guests`;
+    
+    const successRate = overall.success_rate !== undefined ? overall.success_rate : 0;
+    const failureRate = overall.failure_rate !== undefined ? overall.failure_rate : 0;
+    
+    document.getElementById("stats-success-rate").innerText = `${successRate}%`;
+    document.getElementById("stats-success-bar").style.width = `${successRate}%`;
+    
+    document.getElementById("stats-failure-rate").innerText = `${failureRate}%`;
+    document.getElementById("stats-failure-bar").style.width = `${failureRate}%`;
+    
+    document.getElementById("stats-avg-clues").innerText = overall.avg_clues_revealed !== undefined ? overall.avg_clues_revealed : "-";
+    document.getElementById("stats-avg-score").innerText = overall.avg_score !== undefined ? overall.avg_score : "-";
+    
+    // Populate table
+    const tbody = document.getElementById("admin-stats-tbody");
+    if (!tbody) return;
+    
+    if (daily.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-secondary">No games played yet.</td></tr>`;
+        return;
+    }
+    
+    let html = "";
+    daily.forEach(row => {
+        const total = row.total_plays || 0;
+        const sr = row.success_rate !== undefined ? row.success_rate : 0;
+        const fr = row.failure_rate !== undefined ? row.failure_rate : 0;
+        const avgClues = row.avg_clues_revealed !== undefined && row.avg_clues_revealed !== null ? row.avg_clues_revealed : "-";
+        
+        let srClass = "badge-inactive";
+        if (sr >= 70) {
+            srClass = "badge-active";
+        } else if (sr >= 40) {
+            srClass = "badge-active";
+        }
+        
+        html += `
+            <tr>
+                <td style="white-space: nowrap; vertical-align: middle;">
+                    <div style="font-weight: 600;">${escapeHtml(row.formatted_date)}</div>
+                    <div class="text-secondary" style="font-size: 0.8rem; margin-top: 0.1rem;">${escapeHtml(row.date)}</div>
+                </td>
+                <td style="vertical-align: middle; font-weight: 600; color: var(--primary);">
+                    ${escapeHtml(row.name)}
+                </td>
+                <td style="vertical-align: middle; font-weight: 600;">
+                    ${total}
+                </td>
+                <td style="vertical-align: middle;">
+                    <span class="${srClass}" style="${sr >= 70 ? 'background: rgba(16, 185, 129, 0.15); color: var(--success);' : (sr >= 40 ? 'background: rgba(6, 182, 212, 0.15); color: var(--primary);' : 'background: rgba(244, 63, 94, 0.15); color: var(--accent);')} border: 1px solid currentColor;">
+                        ${sr}%
+                    </span>
+                </td>
+                <td style="vertical-align: middle; color: var(--text-secondary);">
+                    ${fr}%
+                </td>
+                <td style="vertical-align: middle; font-weight: 600; color: var(--primary);">
+                    ${avgClues}
+                </td>
+                <td style="vertical-align: middle; font-size: 0.9rem;" class="text-secondary">
+                    <span style="color: var(--success); font-weight: 600;">${row.success_count} W</span> / 
+                    <span style="color: var(--accent); font-weight: 600;">${row.failure_count} L</span>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}

@@ -123,6 +123,42 @@ def init_db():
     except sqlite3.OperationalError:
         conn.execute("ALTER TABLE user_stats ADD COLUMN guesses TEXT")
         conn.commit()
+
+    # Check if game_plays table needs backfilling from user_stats
+    try:
+        plays_count = conn.execute("SELECT COUNT(*) FROM game_plays").fetchone()[0]
+        if plays_count == 0:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO game_plays (date, user_id, won, score, clues_revealed, created_at)
+                SELECT date, user_id, won, score, clues_revealed, created_at FROM user_stats
+                """
+            )
+            conn.commit()
+    except sqlite3.OperationalError:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS game_plays (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                user_id INTEGER,
+                won INTEGER NOT NULL,
+                score INTEGER NOT NULL,
+                clues_revealed INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(user_id, date)
+            )
+            """
+        )
+        conn.commit()
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO game_plays (date, user_id, won, score, clues_revealed, created_at)
+            SELECT date, user_id, won, score, clues_revealed, created_at FROM user_stats
+            """
+        )
+        conn.commit()
         
     # Run database corrections for draft teams and teams_played
     try:
@@ -934,11 +970,28 @@ def submit_game():
             return jsonify({"error": "Premium required to submit missed days."}), 403
             
     if not session.get('user_id'):
-        # For guest play, return success but don't write to DB
+        score = data.get('score', 0)
+        clues_revealed = data.get('clues_revealed', 10)
+        won = data.get('won', 0)
+        
         conn = get_db_connection()
         player = conn.execute(
             "SELECT name, hockeydb_url FROM daily_players WHERE date = ? AND active = 1", (target_date,)
         ).fetchone()
+        
+        if player:
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO game_plays (date, user_id, won, score, clues_revealed)
+                    VALUES (?, NULL, ?, ?, ?)
+                    """,
+                    (target_date, won, score, clues_revealed)
+                )
+                conn.commit()
+            except Exception as e:
+                print(f"Error logging guest play: {e}")
+                
         conn.close()
         return jsonify({
             "status": "guest_success", 
@@ -981,6 +1034,17 @@ def submit_game():
             """,
             (user_id, target_date, score, clues_revealed, wrong_guesses, bet_round, won, json.dumps(guesses))
         )
+        conn.execute(
+            """
+            INSERT INTO game_plays (date, user_id, won, score, clues_revealed)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, date) DO UPDATE SET
+                won=excluded.won,
+                score=excluded.score,
+                clues_revealed=excluded.clues_revealed
+            """,
+            (target_date, user_id, won, score, clues_revealed)
+        )
         conn.commit()
         
         # Get updated lifetime stats for the modal
@@ -998,6 +1062,102 @@ def submit_game():
         return jsonify({"error": str(e)}), 500
 
 # ----------------- ADMIN API -----------------
+
+@app.route('/api/admin/stats')
+def admin_get_stats():
+    if session.get('username') != 'admin':
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    conn = get_db_connection()
+    
+    # 1. Overall stats
+    overall = conn.execute(
+        """
+        SELECT 
+            COUNT(*) as total_plays,
+            SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END) as guest_plays,
+            SUM(CASE WHEN user_id IS NOT NULL THEN 1 ELSE 0 END) as registered_plays,
+            SUM(CASE WHEN won = 1 THEN 1 ELSE 0 END) as success_count,
+            SUM(CASE WHEN won = 0 THEN 1 ELSE 0 END) as failure_count,
+            AVG(clues_revealed) as avg_clues_revealed,
+            AVG(score) as avg_score
+        FROM game_plays
+        """
+    ).fetchone()
+    
+    total = overall['total_plays'] or 0
+    guest_plays = overall['guest_plays'] or 0
+    registered_plays = overall['registered_plays'] or 0
+    success_count = overall['success_count'] or 0
+    failure_count = overall['failure_count'] or 0
+    avg_clues = round(overall['avg_clues_revealed'] or 0, 1)
+    avg_score = round(overall['avg_score'] or 0, 1)
+    
+    success_rate = round((success_count / total * 100), 1) if total > 0 else 0.0
+    failure_rate = round((failure_count / total * 100), 1) if total > 0 else 0.0
+    
+    overall_stats = {
+        "total_plays": total,
+        "guest_plays": guest_plays,
+        "registered_plays": registered_plays,
+        "success_count": success_count,
+        "failure_count": failure_count,
+        "success_rate": success_rate,
+        "failure_rate": failure_rate,
+        "avg_clues_revealed": avg_clues,
+        "avg_score": avg_score
+    }
+    
+    # 2. Daily breakdown stats
+    today_str = date.today().strftime('%Y-%m-%d')
+    daily_rows = conn.execute(
+        """
+        SELECT 
+            dp.date,
+            dp.name,
+            COUNT(gp.id) as total_plays,
+            SUM(CASE WHEN gp.won = 1 THEN 1 ELSE 0 END) as success_count,
+            SUM(CASE WHEN gp.won = 0 THEN 1 ELSE 0 END) as failure_count,
+            AVG(gp.clues_revealed) as avg_clues_revealed
+        FROM daily_players dp
+        LEFT JOIN game_plays gp ON dp.date = gp.date
+        WHERE dp.date <= ? AND dp.active = 1
+        GROUP BY dp.date, dp.name
+        ORDER BY dp.date DESC
+        """,
+        (today_str,)
+    ).fetchall()
+    
+    daily_stats = []
+    for row in daily_rows:
+        t = row['total_plays'] or 0
+        sc = row['success_count'] or 0
+        fc = row['failure_count'] or 0
+        ac = round(row['avg_clues_revealed'] or 0, 1) if row['avg_clues_revealed'] else None
+        
+        sr = round((sc / t * 100), 1) if t > 0 else 0.0
+        fr = round((fc / t * 100), 1) if t > 0 else 0.0
+        
+        dt = datetime.strptime(row['date'], '%Y-%m-%d').date()
+        formatted_date = dt.strftime('%b %d, %Y')
+        
+        daily_stats.append({
+            "date": row['date'],
+            "formatted_date": formatted_date,
+            "name": row['name'],
+            "total_plays": t,
+            "success_count": sc,
+            "failure_count": fc,
+            "success_rate": sr,
+            "failure_rate": fr,
+            "avg_clues_revealed": ac
+        })
+        
+    conn.close()
+    return jsonify({
+        "overall": overall_stats,
+        "daily": daily_stats
+    })
 
 @app.route('/api/admin/users')
 def admin_get_users():
